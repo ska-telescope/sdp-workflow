@@ -18,7 +18,7 @@ stages:
 
 .env: &env
   variables:
-    BUILD_PATH: src/ska_sdp_workflow
+    BUILD_PATH: src
 
 # ============================================================================
 # Common definitions for building Python packages
@@ -41,8 +41,7 @@ stages:
     - python3 setup.py egg_info -b+dev.$CI_COMMIT_SHORT_SHA sdist bdist_wheel
 #  except: [master]
 
- Executed on a master commit
-
+# Executed on a master commit
 #.build_python_release:
 #  extends: .build_python
 #  script:
@@ -73,14 +72,14 @@ stages:
 # ============================================================================
 
 # Executed on a non-master commit
-build:ska-sdp-worflow_dev:
+build:ska-sdp-workflow_dev:
   extends: .build_python_dev
   <<: *env
 
-# Executed on a master commit
-build:ska-sdp-workflow:
-  extends: .build_python_release
-  <<: *env
+## Executed on a master commit
+#build:ska-sdp-workflow:
+#  extends: .build_python_release
+#  <<: *env
 
 ## ============================================================================
 ## Test Python package
@@ -97,5 +96,5 @@ build:ska-sdp-workflow:
 publish:ska-sdp-logging:
   extends: .publish_python
   dependencies:
-    - build:ska-sdp-workflow
+    - build:ska-sdp-workflow_dev
   <<: *env
