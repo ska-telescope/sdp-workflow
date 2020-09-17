@@ -5,12 +5,9 @@
 import sys
 import time
 import logging
-import ska.logging
 import ska_sdp_config
 
-# TODO (NJT): Need to look into this
-ska.logging.configure_logging()
-LOG = logging.getLogger('test_realtime')
+LOG = logging.getLogger('worklow')
 LOG.setLevel(logging.DEBUG)
 
 

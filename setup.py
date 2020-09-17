@@ -6,7 +6,7 @@ import os
 import setuptools
 
 RELEASE_INFO = {}
-RELEASE_PATH = os.path.join('src/ska_sdp_workflow', 'release.py')
+RELEASE_PATH = os.path.join('src', 'ska_sdp_workflow', 'release.py')
 exec(open(RELEASE_PATH).read(), RELEASE_INFO)
 
 with open("README.md", "r") as fh:
@@ -21,7 +21,9 @@ setuptools.setup(
     long_description=LONG_DESCRIPTION,
     long_description_content_type='text/markdown',
     url='https://gitlab.com/ska-telescope/sdp-workflow',
-    packages=setuptools.find_packages(),
+    # packages=setuptools.find_packages(),
+    package_dir={"": "src"},
+    packages=setuptools.find_namespace_packages(where="src"),
     # Workaround: avoid declaring pytango dependency.
     # It's ok to fail to load if not there.
     # install_requires=[
