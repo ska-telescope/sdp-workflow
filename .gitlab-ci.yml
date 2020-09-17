@@ -1,0 +1,101 @@
+# GitLab CI jobs for SDP Workflow library
+
+variables:
+  GIT_STRATEGY: clone
+
+workflow:
+  rules:
+    - if: $CI_MERGE_REQUEST_ID
+    - if: $CI_COMMIT_BRANCH
+
+stages:
+  - build
+  - test
+  - post_test
+  - linting
+  - publish
+  - pages
+
+.env: &env
+  variables:
+    BUILD_PATH: src/ska_sdp_workflow
+
+# ============================================================================
+# Common definitions for building Python packages
+# ============================================================================
+
+.build_python:
+  stage: build
+  image: python:latest
+  artifacts:
+    paths:
+      - ./$BUILD_PATH/dist/
+    expire_in: 1 week
+
+# Executed on a non-master commit
+
+.build_python_dev:
+  extends: .build_python
+  script:
+    - cd $BUILD_PATH
+    - python3 setup.py egg_info -b+dev.$CI_COMMIT_SHORT_SHA sdist bdist_wheel
+#  except: [master]
+
+ Executed on a master commit
+
+#.build_python_release:
+#  extends: .build_python
+#  script:
+#    - cd $BUILD_PATH
+#    - python3 setup.py sdist bdist_wheel
+#  only: [master]
+
+# ============================================================================
+# Common definitions for publishing Python packages
+# ============================================================================
+
+.publish_python:
+  stage: publish
+  image: python:latest
+  only: [master]
+  variables:
+    TWINE_USERNAME: $TWINE_USERNAME
+    TWINE_PASSWORD: $TWINE_PASSWORD
+  script:
+    - python3 -m pip install twine
+    - cd $BUILD_PATH
+    - twine upload --repository-url $PYPI_REPOSITORY_URL dist/* || true
+    - twine upload --skip-existing -u $PYPI_USER -p $PYPI_PASS dist/* || true
+
+
+# ============================================================================
+# Build Python package
+# ============================================================================
+
+# Executed on a non-master commit
+build:ska-sdp-worflow_dev:
+  extends: .build_python_dev
+  <<: *env
+
+# Executed on a master commit
+build:ska-sdp-workflow:
+  extends: .build_python_release
+  <<: *env
+
+## ============================================================================
+## Test Python package
+## ============================================================================
+#
+#test:ska-sdp-workflow:
+#  extends: .test_python
+#  <<: *env
+#
+# ============================================================================
+# Publish Python package (master only)
+# ============================================================================
+
+publish:ska-sdp-logging:
+  extends: .publish_python
+  dependencies:
+    - build:ska-sdp-workflow
+  <<: *env
