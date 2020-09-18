@@ -20,7 +20,14 @@ class Workflow:
         LOG.info('Opening connection to config DB')
         self._config = ska_sdp_config.Config()
 
+    def func_test(self):
+        print("Inside the test function")
+        a = 11111
+        print(a)
+        return a
+
     def claim_processing_block(self, pb_id):
+        print("Inside the claim processing block")
         # Claim processing block
         for txn in self._config.txn():
             txn.take_processing_block(pb_id, self._config.client_lease)
