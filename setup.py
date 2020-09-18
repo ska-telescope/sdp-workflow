@@ -26,9 +26,10 @@ setuptools.setup(
     packages=setuptools.find_namespace_packages(where="src"),
     # Workaround: avoid declaring pytango dependency.
     # It's ok to fail to load if not there.
-    # install_requires=[
-    #     'pytango'
-    # ],
+    install_requires=[
+        'ska-sdp-config>=0.0.11',
+        'ska-sdp-logging>=0.0.6'
+    ],
     setup_requires=['pytest-runner'],
     tests_require=[
         'pylint2junit',
