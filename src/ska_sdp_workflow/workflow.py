@@ -27,7 +27,9 @@ class Workflow:
             pb = txn.get_processing_block(pb_id)
         LOG.info('Claimed processing block')
 
+        LOG.info(pb)
         sbi_id = pb.id
+        LOG.info("SBI ID %s", sbi_id)
         return sbi_id
 
     def get_definition(self, pb_id):
