@@ -19,6 +19,7 @@ class Workflow:
         # Get connection to config DB
         LOG.info('Opening connection to config DB')
         self._config = ska_sdp_config.Config()
+        print("Config DB initialised")
 
     def func_test(self):
         print("Inside the test function")
