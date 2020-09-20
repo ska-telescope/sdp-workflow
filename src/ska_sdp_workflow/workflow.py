@@ -31,7 +31,7 @@ class Workflow:
 
         print("PB.ID - ", pb.id)
         LOG.debug("TESTING IF LOG WORKINGGG")
-        sbi_id = pb.id
+        sbi_id = pb.sbi_id
         print("Scheduling block ID IN claim - : ", sbi_id)
         return sbi_id
 
