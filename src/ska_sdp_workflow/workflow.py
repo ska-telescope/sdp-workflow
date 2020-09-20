@@ -38,12 +38,14 @@ class Workflow:
         LOG.info(pb)
         sbi_id = pb.id
         LOG.info("SBI ID %s", sbi_id)
+        print(sbi_id)
         return sbi_id
 
     def get_definition(self, pb_id):
         pass
 
     def get_parameters(self, pb_id):
+        print("Get parameters")
         for txn in self._config.txn():
             pb = txn.get_processing_block(pb_id)
             # TODO (NJT): Not just duration parameter - But this just for the time being
@@ -57,6 +59,7 @@ class Workflow:
     def resource_request(self, pb_id):
         # Set state to indicate workflow is waiting for resources
         LOG.info('Setting status to WAITING')
+        print("Setting status to WAITINGGGG")
         for txn in self._config.txn():
             state = txn.get_processing_block_state(pb_id)
             state['status'] = 'WAITING'
@@ -75,6 +78,7 @@ class Workflow:
     def process_started(self, pb_id):
         # Set state to indicate processing has started
         LOG.info('Setting status to RUNNING')
+        print("Setting status to RUNNINGGGG")
         for txn in self._config.txn():
             state = txn.get_processing_block_state(pb_id)
             state['status'] = 'RUNNING'
@@ -86,6 +90,7 @@ class Workflow:
     def monitor_sbi(self, sbi_id, pb_id):
         # Wait until SBI is marked as FINISHED or CANCELLED
         LOG.info('Waiting for SBI to end')
+        print("Waiting for SBI to endDDDD")
         for txn in self._config.txn():
             sbi = txn.get_scheduling_block(sbi_id)
             status = sbi.get('status')
