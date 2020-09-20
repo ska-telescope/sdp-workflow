@@ -21,12 +21,6 @@ class Workflow:
         self._config = ska_sdp_config.Config()
         print("Config DB initialised")
 
-    def func_test(self):
-        print("Inside the test function")
-        a = 11111
-        print(a)
-        return a
-
     def claim_processing_block(self, pb_id):
         print("Inside the claim processing block")
         # Claim processing block
@@ -35,10 +29,10 @@ class Workflow:
             pb = txn.get_processing_block(pb_id)
         LOG.info('Claimed processing block')
 
-        LOG.info(pb)
+        print("PB.ID - ", pb.id)
+        LOG.debug("TESTING IF LOG WORKINGGG")
         sbi_id = pb.id
-        LOG.info("SBI ID %s", sbi_id)
-        print(sbi_id)
+        print("Scheduling block ID IN claim - : ", sbi_id)
         return sbi_id
 
     def get_definition(self, pb_id):
@@ -91,8 +85,10 @@ class Workflow:
         # Wait until SBI is marked as FINISHED or CANCELLED
         LOG.info('Waiting for SBI to end')
         print("Waiting for SBI to endDDDD")
+        print("Scheduling block ID: ", sbi_id)
         for txn in self._config.txn():
             sbi = txn.get_scheduling_block(sbi_id)
+            print("SBI - ", sbi)
             status = sbi.get('status')
             if status in ['FINISHED', 'CANCELLED']:
                 LOG.info('SBI is %s', status)
