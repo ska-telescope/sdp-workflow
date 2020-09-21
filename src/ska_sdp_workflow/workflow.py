@@ -5,8 +5,10 @@
 import sys
 import time
 import logging
+import ska.logging
 import ska_sdp_config
 
+ska.logging.configure_logging()
 LOG = logging.getLogger('worklow')
 LOG.setLevel(logging.DEBUG)
 
