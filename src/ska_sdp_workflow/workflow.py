@@ -4,126 +4,120 @@
 
 import sys
 import time
+import os
 import logging
-import ska.logging
+import sys
+# import ska.logging
 import ska_sdp_config
+import distributed
 
-ska.logging.configure_logging()
+# ska.logging.configure_logging()
 LOG = logging.getLogger('worklow')
 LOG.setLevel(logging.DEBUG)
 
 
-class Workflow:
+class ProcessingBlock:
 
     def __init__(self):
-        """Initialise."""
+        """Initialise.
+
+        Claim processing block.
+
+        """
+
         # Get connection to config DB
         LOG.info('Opening connection to config DB')
         self._config = ska_sdp_config.Config()
 
-    def claim_processing_block(self, pb_id):
-        """Claim processing block.
+        # Processing block ID
+        self._pb_id = sys.argv[1:]
 
-        :param pb_id: processing block ID
-        :returns: Scheduling block ID
-
-        """
         for txn in self._config.txn():
-            txn.take_processing_block(pb_id, self._config.client_lease)
-            pb = txn.get_processing_block(pb_id)
+            txn.take_processing_block(self._pb_id, self._config.client_lease)
+            pb = txn.get_processing_block(self._pb_id)
         LOG.info('Claimed processing block')
 
-        sbi_id = pb.sbi_id
-        return sbi_id
+        # Processing Block
+        self._pb = pb
 
-    def resource_request(self, pb_id):
+        # Scheduling Block Instance ID
+        self._sbi_id = pb.sbi_id
+
+    def request_buffer(self, size, tags):
+
+        return BufferRequest(size, tags)
+
+    def request_compute(self, phases):
+
+        return ComputeRequest(phases)
+
+    def create_phase(self, name, reservation):
+
+        return Phase(name, reservation)
+
+    def resource_request(self):
         """Make resource request, assuming input is in the form of a dict.
 
-        :param pb_id: processing block ID
-
         """
+
         # Set state to indicate workflow is waiting for resources.
         LOG.info('Setting status to WAITING')
         for txn in self._config.txn():
-            state = txn.get_processing_block_state(pb_id)
+            state = txn.get_processing_block_state(self._pb_id)
             state['status'] = 'WAITING'
-            txn.update_processing_block_state(pb_id, state)
+            txn.update_processing_block_state(self._pb_id, state)
 
         # Wait for resources_available to be true
         LOG.info('Waiting for resources to be available')
         for txn in self._config.txn():
-            state = txn.get_processing_block_state(pb_id)
+            state = txn.get_processing_block_state(self._pb_id)
             ra = state.get('resources_available')
             if ra is not None and ra:
                 LOG.info('Resources are available')
                 break
             txn.loop(wait=True)
 
-    # def release(self, status):
-    #     pass
+    def wait_loop(self):
+        """Wait loop."""
 
-    def process_started(self, pb_id):
-        """The process is started.
+        return self._config.txn()
 
-        :param pb_id: processing block ID
+    def is_finished(self, txn):
+        sbi = txn.get_scheduling_block(self._sbi_id)
+        status = sbi.get('status')
+        if status in ['FINISHED']:
+            LOG.info('SBI is %s', status)
 
-        """
-        # Set state to indicate processing has started
-        LOG.info('Setting status to RUNNING')
-        for txn in self._config.txn():
-            state = txn.get_processing_block_state(pb_id)
-            state['status'] = 'RUNNING'
-            txn.update_processing_block_state(pb_id, state)
-
-    def monitor_sbi(self, sbi_id, pb_id):
-        """For real-time workflows, wait for something to change in the SBI.
-
-        :param pb_id: processing block ID
-        :param sbi_id: scheduling block ID
-
-        """
-        # Wait until SBI is marked as FINISHED or CANCELLED
-        LOG.info('Waiting for SBI to end')
-        for txn in self._config.txn():
-            sbi = txn.get_scheduling_block(sbi_id)
-            status = sbi.get('status')
-            if status in ['FINISHED', 'CANCELLED']:
-                LOG.info('SBI is %s', status)
-                break
-            txn.loop(wait=True)
-
-        # Set state to indicate processing has ended
-        LOG.info('Setting status to %s', status)
-        for txn in self._config.txn():
-            state = txn.get_processing_block_state(pb_id)
+            # Set state to indicate processing has ended
+            LOG.info('Setting status to %s', status)
+            state = txn.get_processing_block_state(self._pb_id)
             state['status'] = status
-            txn.update_processing_block_state(pb_id, state)
+            txn.update_processing_block_state(self._pb_id, state)
+            finished = True
+        else:
+            finished = False
+        return finished
 
-    def monitor_sbi_batch(self, pb_id, duration):
-        """Monitor SBI for batch workflows.
+    def is_error(self, txn):
+        sbi = txn.get_scheduling_block(self._sbi_id)
+        status = sbi.get('status')
+        if status in ['CANCELLED']:
+            LOG.info('SBI is %s', status)
+            error = True
+        else:
+            error = False
+        return error
 
-        :param pb_id: processing block ID
-        :param duration: duration parameter
+    def set_error(self, txn, message):
+        state = txn.get_processing_block_state(self._pb_id)
+        state['status'] = 'CANCELLED'
+        txn.update_processing_block_state(self._pb_id, state)
+        LOG.info(message)
 
-        """
-        # Do some 'processing' for the required duration
-        LOG.info('Starting processing for %f s', duration)
-        time.sleep(duration)
-        LOG.info('Finished processing')
-
-        # Set state to indicate processing has ended
-        LOG.info('Setting status to FINISHED')
-        for txn in self._config.txn():
-            state = txn.get_processing_block_state(pb_id)
-            state['status'] = 'FINISHED'
-            txn.update_processing_block_state(pb_id, state)
-
-    def receive_addresses(self, scan_types, sbi_id, pb_id):
+    def receive_addresses(self, scan_types):
         """Generate receive addresses and update it in the processing block state.
 
         :param scan_types: Scan types
-        :param sbi_id: scheduling block ID
-        :param pb_id: processing block ID
 
         """
 
@@ -134,49 +128,38 @@ class Workflow:
         # Update receive addresses in processing block state
         LOG.info('Updating receive addresses in processing block state')
         for txn in self._config.txn():
-            state = txn.get_processing_block_state(pb_id)
+            state = txn.get_processing_block_state(self._pb_id)
             state['receive_addresses'] = receive_addresses
-            txn.update_processing_block_state(pb_id, state)
+            txn.update_processing_block_state(self._pb_id, state)
 
         # Write pb_id in pb_receive_addresses in SBI
         LOG.info('Writing PB ID to pb_receive_addresses in SBI')
         for txn in self._config.txn():
-            sbi = txn.get_scheduling_block(sbi_id)
-            sbi['pb_receive_addresses'] = pb_id
-            txn.update_scheduling_block(sbi_id, sbi)
+            sbi = txn.get_scheduling_block(self._sbi_id)
+            sbi['pb_receive_addresses'] = self._pb_id
+            txn.update_scheduling_block(self._sbi_id, sbi)
 
-    def get_parameters(self, pb_id):
+    def get_parameters(self, schema=None):
         """Get workflow parameters from processing block as a dict, parsing with schema.
 
         :param pb_id: processing block ID
-        :returns: duration parameter - TEMPORARY
+        :returns: pb_parameters
 
         """
-        for txn in self._config.txn():
-            pb = txn.get_processing_block(pb_id)
-            # TODO (NJT): Not just duration parameter - But this just for the time being
-            # Get parameter and parse it
-            duration = pb.parameters.get('duration')
-            if duration is None:
-                duration = 60.0
-            LOG.info('duration: %f s', duration)
-        return duration
+        parameters = self._pb.parameters
+        if schema is not None:
+            LOG.info("Validate parameters aganist schema")
+        return parameters
 
-    def get_scan_types(self, sbi_id):
-        """Get scan types.
+    def get_scan_types(self):
+        """Get scan types."""
 
-        :param sbi_id: Scheduling block ID
-
-        """
         LOG.info('Retrieving channel link map from SBI')
         for txn in self._config.txn():
-            sbi = txn.get_scheduling_block(sbi_id)
+            sbi = txn.get_scheduling_block(self._sbi_id)
             scan_types = sbi.get('scan_types')
 
         return scan_types
-
-    # def get_definition(self, pb_id):
-    #     pass
 
     # -------------------------------------
     # Private methods
@@ -216,5 +199,23 @@ class Workflow:
         return receive_addresses
 
 
+class BufferRequest:
+    def __init__(self, size, tags):
+        """Init"""
 
+
+class ComputeRequest:
+    def __init__(self, phases):
+        """Init"""
+
+
+class Phase:
+    def __init__(self, name, list_reservations):
+        """Init"""
+
+    def __enter__(self):
+        pass
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        pass
 

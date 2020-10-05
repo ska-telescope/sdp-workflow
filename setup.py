@@ -27,7 +27,7 @@ setuptools.setup(
     # Workaround: avoid declaring pytango dependency.
     # It's ok to fail to load if not there.
     install_requires=[
-        'ska-logging',
+        # 'ska-logging',
         'ska-sdp-config>=0.0.11',
         'ska-sdp-logging>=0.0.6'
     ],
