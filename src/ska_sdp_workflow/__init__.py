@@ -2,6 +2,6 @@
 """SDP workflow package."""
 # pylint: disable=invalid-name
 
-from .workflow import ClaimProcessingBlock
+from .workflow import ProcessingBlock
 
-__all__ = ['ClaimProcessingBlock']
+__all__ = ['ProcessingBlock']

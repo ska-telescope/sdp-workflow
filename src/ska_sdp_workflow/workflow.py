@@ -11,6 +11,8 @@ import sys
 import ska_sdp_config
 import distributed
 
+from schema import Schema
+
 # ska.logging.configure_logging()
 LOG = logging.getLogger('worklow')
 LOG.setLevel(logging.DEBUG)
@@ -55,27 +57,9 @@ class ProcessingBlock:
 
         return Phase(name, reservation)
 
-    def resource_request(self):
-        """Make resource request, assuming input is in the form of a dict.
-
-        """
-
-        # Set state to indicate workflow is waiting for resources.
-        LOG.info('Setting status to WAITING')
-        for txn in self._config.txn():
-            state = txn.get_processing_block_state(self._pb_id)
-            state['status'] = 'WAITING'
-            txn.update_processing_block_state(self._pb_id, state)
-
-        # Wait for resources_available to be true
-        LOG.info('Waiting for resources to be available')
-        for txn in self._config.txn():
-            state = txn.get_processing_block_state(self._pb_id)
-            ra = state.get('resources_available')
-            if ra is not None and ra:
-                LOG.info('Resources are available')
-                break
-            txn.loop(wait=True)
+    def deploy(self, deploy_id, deploy_chart):
+        """Deploy Execution Engine."""
+        return ComputeStage(deploy_id, deploy_chart, self._config)
 
     def wait_loop(self):
         """Wait loop."""
@@ -98,21 +82,12 @@ class ProcessingBlock:
             finished = False
         return finished
 
-    def is_error(self, txn):
-        sbi = txn.get_scheduling_block(self._sbi_id)
-        status = sbi.get('status')
-        if status in ['CANCELLED']:
-            LOG.info('SBI is %s', status)
-            error = True
-        else:
-            error = False
-        return error
-
-    def set_error(self, txn, message):
+    def exit(self, txn, message):
         state = txn.get_processing_block_state(self._pb_id)
         state['status'] = 'CANCELLED'
         txn.update_processing_block_state(self._pb_id, state)
         LOG.info(message)
+        exit(1)
 
     def receive_addresses(self, scan_types):
         """Generate receive addresses and update it in the processing block state.
@@ -148,7 +123,7 @@ class ProcessingBlock:
         """
         parameters = self._pb.parameters
         if schema is not None:
-            LOG.info("Validate parameters aganist schema")
+            LOG.info("Validate parameters against schema")
         return parameters
 
     def get_scan_types(self):
@@ -209,13 +184,61 @@ class ComputeRequest:
         """Init"""
 
 
+class ComputeStage:
+    def __init__(self, deploy_id, deploy_chart, config):
+        """Init"""
+        self._config = config
+        deploy = ska_sdp_config.Deployment(deploy_id, deploy_chart)
+        for txn in self._config.txn():
+            txn.create_deployment(deploy)
+
+
+    def is_finished(self, txn):
+        """Check if the compute stage finished."""
+
+        # check if the deployment was a success
+
+    def is_error(self, txn):
+
+        # Check if the deployment failed or not
+        sbi = txn.get_scheduling_block(self._sbi_id)
+        status = sbi.get('status')
+        if status in ['CANCELLED']:
+            LOG.info('SBI is %s', status)
+            error = True
+        else:
+            error = False
+        return error
+
+
 class Phase:
     def __init__(self, name, list_reservations):
         """Init"""
+        self._name = name
+        self._reservations = list_reservations
 
     def __enter__(self):
-        pass
+        # Check if the pb is cancelled or sbi is finished and also if the resources are
+        # available
+
+        # Check if the pb is cancelled or sbi is finished or cancelled
+        for txn in self._config.txn():
+            pb_state = txn.get_processing_block_state(self._pb_id)
+            sbi = txn.get_scheduling_block(self._sbi_id)
+            sbi_status = sbi.get('status')
+            if pb_state or sbi_status in ['FINISHED', 'CANCELLED']:
+                LOG.info('PB is %s', pb_state)
+                LOG.info('SBI is %s', sbi_status)
+
+        # Wait for resources_available to be true
+        LOG.info('Waiting for resources to be available')
+        for txn in self._config.txn():
+            state = txn.get_processing_block_state(self._pb_id)
+            ra = state.get('resources_available')
+            if ra is not None and ra:
+                LOG.info('Resources are available')
+                break
+            txn.loop(wait=True)
 
     def __exit__(self, exc_type, exc_val, exc_tb):
         pass
-
