@@ -10,7 +10,7 @@ workflow:
 
 stages:
   - test
-  - lint
+#  - lint
   - build
   - publish
 
@@ -27,9 +27,9 @@ test:
     - pip3 install -r requirements.txt -r requirements-test.txt
   script:
     - python3 setup.py test
-  after_script:
-    - mkdir -p build/reports
-    - mv code-coverage.xml unit-tests.xml build/reports
+#  after_script:
+#    - mkdir -p build/reports
+#    - mv code-coverage.xml unit-tests.xml build/reports
   artifacts:
     paths:
       - build
@@ -87,7 +87,7 @@ build_release:
 
 publish:
   stage: publish
-  only: [master]
+#  only: [master]
   variables:
     TWINE_USERNAME: $TWINE_USERNAME
     TWINE_PASSWORD: $TWINE_PASSWORD
