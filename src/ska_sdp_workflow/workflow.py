@@ -74,7 +74,7 @@ class ProcessingBlock:
         return self._config.txn()
 
     def is_finished(self, txn):
-        """Checks if the sbi is finished.
+        """Checks if the pb is finished.
 
         :param: txn: config transaction
 
@@ -87,9 +87,9 @@ class ProcessingBlock:
         else:
             finished = False
 
-        # Check if the pb is finished or cancelled
+        # Check if the pb is finished
         pb_state = txn.get_processing_block_state(self._pb_id)
-        if pb_state in ['FINISHED', 'CANCELLED']:
+        if pb_state in ['FINISHED']:
             LOG.info('PB is %s', pb_state)
 
         return finished
