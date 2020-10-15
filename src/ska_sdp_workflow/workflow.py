@@ -66,7 +66,8 @@ class ProcessingBlock:
         :param deploy_chart: deploy chart
         :returns: handle to the computeState class
         """
-        return ComputeStage(deploy_id, deploy_type, deploy_chart, self._config)
+        return ComputeStage(deploy_id, deploy_type, deploy_chart,
+                            self._config, self._pb_id, self._sbi_id)
 
     def wait_loop(self):
         """Wait loop.
