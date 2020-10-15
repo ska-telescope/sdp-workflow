@@ -1,0 +1,5 @@
+pylint2junit
+pytest
+pytest-cov
+pytest-pylint
+pytest-runner

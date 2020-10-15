@@ -9,9 +9,7 @@ import logging
 import sys
 # import ska.logging
 import ska_sdp_config
-import distributed
 
-from schema import Schema
 
 # ska.logging.configure_logging()
 LOG = logging.getLogger('worklow')
@@ -19,12 +17,14 @@ LOG.setLevel(logging.DEBUG)
 
 
 class ProcessingBlock:
+    """SDP Workflow"""
 
-    def __init__(self):
+    def __init__(self, pb_id=None):
         """Initialise.
 
         Claim processing block.
 
+        :param pb_id: processing block id
         """
 
         # Get connection to config DB
@@ -32,8 +32,12 @@ class ProcessingBlock:
         self._config = ska_sdp_config.Config()
 
         # Processing block ID
-        self._pb_id = sys.argv[1:]
+        if pb_id is None:
+            self._pb_id = sys.argv[1:]
+        else:
+            self._pb_id = pb_id
 
+        # Claim processing block
         for txn in self._config.txn():
             txn.take_processing_block(self._pb_id, self._config.client_lease)
             pb = txn.get_processing_block(self._pb_id)
@@ -45,41 +49,49 @@ class ProcessingBlock:
         # Scheduling Block Instance ID
         self._sbi_id = pb.sbi_id
 
-    def request_buffer(self, size, tags):
+    def id(self):
+        """Get processing block id
 
-        return BufferRequest(size, tags)
+        :returns: processing block id
+        """
+        return self._pb_id
 
-    def request_compute(self, phases):
+    def deploy(self, deploy_id, deploy_type, deploy_chart):
+        """Deploy Execution Engine.
 
-        return ComputeRequest(phases)
-
-    def create_phase(self, name, reservation):
-
-        return Phase(name, reservation)
-
-    def deploy(self, deploy_id, deploy_chart):
-        """Deploy Execution Engine."""
-        return ComputeStage(deploy_id, deploy_chart, self._config)
+        :param deploy_id: deploy id
+        :param deploy_type: deploy type
+        :param deploy_chart: deploy chart
+        :returns: handle to the computeState class
+        """
+        return ComputeStage(deploy_id, deploy_type, deploy_chart, self._config)
 
     def wait_loop(self):
-        """Wait loop."""
+        """Wait loop.
+
+        :returns: config transaction"""
 
         return self._config.txn()
 
     def is_finished(self, txn):
-        sbi = txn.get_scheduling_block(self._sbi_id)
-        status = sbi.get('status')
-        if status in ['FINISHED']:
-            LOG.info('SBI is %s', status)
+        """Checks if the sbi is finished.
 
-            # Set state to indicate processing has ended
-            LOG.info('Setting status to %s', status)
-            state = txn.get_processing_block_state(self._pb_id)
-            state['status'] = status
-            txn.update_processing_block_state(self._pb_id, state)
+        :param: txn: config transaction
+
+        """
+
+        # Check if the ownership is lost
+        if not txn.is_processing_block_owner(self._pb_id):
+            LOG.info('Lost ownership of the processing block')
             finished = True
         else:
             finished = False
+
+        # Check if the pb is finished or cancelled
+        pb_state = txn.get_processing_block_state(self._pb_id)
+        if pb_state in ['FINISHED', 'CANCELLED']:
+            LOG.info('PB is %s', pb_state)
+
         return finished
 
     def exit(self, txn, message):
@@ -124,6 +136,8 @@ class ProcessingBlock:
         parameters = self._pb.parameters
         if schema is not None:
             LOG.info("Validate parameters against schema")
+
+        LOG.info(parameters)
         return parameters
 
     def get_scan_types(self):
@@ -135,6 +149,22 @@ class ProcessingBlock:
             scan_types = sbi.get('scan_types')
 
         return scan_types
+
+    @property
+    def sbi(self):
+        return SchedulingBlockInstance(self._sbi_id, self._config)
+
+    def request_buffer(self, size, tags):
+
+        return BufferRequest(size, tags)
+
+    def request_compute(self, phases):
+
+        return ComputeRequest(phases)
+
+    def create_phase(self, name, reservation):
+
+        return Phase(name, reservation, self._config, self._pb_id, self._sbi_id)
 
     # -------------------------------------
     # Private methods
@@ -174,9 +204,35 @@ class ProcessingBlock:
         return receive_addresses
 
 
+class SchedulingBlockInstance:
+    def __init__(self, sbi_id, config):
+        """Init"""
+        self._sbi_id = sbi_id
+        self._config = config
+
+    def is_finished(self):
+        for txn in self._config.txn():
+            sbi = txn.get_scheduling_block(self._sbi_id)
+            status = sbi.get('status')
+            if status in ['FINISHED']:
+                LOG.info('SBI is %s', status)
+
+                # Set state to indicate processing has ended
+                LOG.info('Setting status to %s', status)
+                state = txn.get_processing_block_state(self._pb_id)
+                state['status'] = status
+                txn.update_processing_block_state(self._pb_id, state)
+                finished = True
+            else:
+                finished = False
+
+            return finished
+
+
 class BufferRequest:
     def __init__(self, size, tags):
         """Init"""
+        LOG.info("Buffer Requested")
 
 
 class ComputeRequest:
@@ -185,21 +241,25 @@ class ComputeRequest:
 
 
 class ComputeStage:
-    def __init__(self, deploy_id, deploy_chart, config):
+    def __init__(self, deploy_id, deploy_type, deploy_chart,
+                 config, pb_id, sbi_id):
         """Init"""
         self._config = config
-        deploy = ska_sdp_config.Deployment(deploy_id, deploy_chart)
+        self._deploy_id = deploy_id
+        self._pb_id = pb_id
+        self._sbi_id = sbi_id
+        self._deploy = ska_sdp_config.Deployment(deploy_id, deploy_type, deploy_chart)
         for txn in self._config.txn():
-            txn.create_deployment(deploy)
-
+            txn.create_deployment(self._deploy)
 
     def is_finished(self, txn):
         """Check if the compute stage finished."""
 
         # check if the deployment was a success
 
-    def is_error(self, txn):
+        deploy_details = txn.get_deployments(self._deploy_id)
 
+    def is_error(self, txn):
         # Check if the deployment failed or not
         sbi = txn.get_scheduling_block(self._sbi_id)
         status = sbi.get('status')
@@ -208,18 +268,29 @@ class ComputeStage:
             error = True
         else:
             error = False
+
+        if not txn.is_processing_block_owner(self._pb_id):
+            error = True
         return error
+
+    def delete_deploy(self):
+        # Cleaning up deployment
+        for txn in self._config.txn():
+            txn.delete_deployment(self._deploy)
 
 
 class Phase:
-    def __init__(self, name, list_reservations):
+    def __init__(self, name, list_reservations, config, pb_id, sbi_id):
         """Init"""
         self._name = name
         self._reservations = list_reservations
+        self._config = config
+        self._pb_id = pb_id
+        self._sbi_id = sbi_id
 
     def __enter__(self):
-        # Check if the pb is cancelled or sbi is finished and also if the resources are
-        # available
+        '''Check if the pb is cancelled or sbi is finished and also if the resources are
+        available'''
 
         # Check if the pb is cancelled or sbi is finished or cancelled
         for txn in self._config.txn():
@@ -240,5 +311,6 @@ class Phase:
                 break
             txn.loop(wait=True)
 
-    def __exit__(self, exc_type, exc_val, exc_tb):
-        pass
+    def __exit__(self):
+        print("Exiting")
+        ComputeStage().delete_deploy()
