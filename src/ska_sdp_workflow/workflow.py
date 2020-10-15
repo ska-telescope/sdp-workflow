@@ -33,9 +33,11 @@ class ProcessingBlock:
 
         # Processing block ID
         if pb_id is None:
-            self._pb_id = sys.argv[1:]
+            self._pb_id = sys.argv[1:][0]
         else:
             self._pb_id = pb_id
+
+        LOG.info("Processing Block ID %s", self._pb_id)
 
         # Claim processing block
         for txn in self._config.txn():
@@ -83,16 +85,11 @@ class ProcessingBlock:
         # Check if the ownership is lost
         if not txn.is_processing_block_owner(self._pb_id):
             LOG.info('Lost ownership of the processing block')
-            finished = True
-            return finished
-        else:
-            finished = False
 
-        # Check if the pb is finished
-        pb_state = txn.get_processing_block_state(self._pb_id)
-        if pb_state in ['FINISHED']:
-            LOG.info('PB is %s', pb_state)
-            finished = True
+            # Check if the pb state is set to finished
+            pb_state = txn.get_processing_block_state(self._pb_id)
+            if pb_state in ['FINISHED']:
+                finished = True
         else:
             finished = False
 
