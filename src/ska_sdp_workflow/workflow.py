@@ -302,6 +302,13 @@ class Phase:
                 LOG.info('PB is %s', pb_state)
                 LOG.info('SBI is %s', sbi_status)
 
+        # Set state to indicate workflow is waiting for resources
+        LOG.info('Setting status to WAITING')
+        for txn in self._config.txn():
+            state = txn.get_processing_block_state(self._pb_id)
+            state['status'] = 'WAITING'
+            txn.update_processing_block_state(self._pb_id, state)
+
         # Wait for resources_available to be true
         LOG.info('Waiting for resources to be available')
         for txn in self._config.txn():
