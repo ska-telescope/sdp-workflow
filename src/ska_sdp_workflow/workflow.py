@@ -84,6 +84,7 @@ class ProcessingBlock:
         if not txn.is_processing_block_owner(self._pb_id):
             LOG.info('Lost ownership of the processing block')
             finished = True
+            return finished
         else:
             finished = False
 
@@ -91,6 +92,9 @@ class ProcessingBlock:
         pb_state = txn.get_processing_block_state(self._pb_id)
         if pb_state in ['FINISHED']:
             LOG.info('PB is %s', pb_state)
+            finished = True
+        else:
+            finished = False
 
         return finished
 
