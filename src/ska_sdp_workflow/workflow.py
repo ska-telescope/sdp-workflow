@@ -318,6 +318,7 @@ class RealTimePhase:
 
         if d_name is not None:
             deploy_id = 'proc-{}-{}}'.format(self._pb_id, d_name)
+            LOG.info(deploy_id)
             self._deploy = ska_sdp_config.Deployment(deploy_id, d_type, d_chart)
             for txn in self._config.txn():
                 txn.create_deployment(self._deploy)
