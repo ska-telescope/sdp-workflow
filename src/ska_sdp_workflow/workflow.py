@@ -362,6 +362,7 @@ class Phase:
         LOG.info('Closing connection to config DB')
         self._config.close()
 
-        LOG.info('Asked to terminate')
+        # This is for testing
+        exit(0)
 
         # ComputeStage().delete_deploy()
