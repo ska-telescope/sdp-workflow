@@ -340,7 +340,7 @@ class Phase:
             txn.update_processing_block_state(self._pb_id, state)
 
 
-    def __exit__(self):
+    def __exit__(self, exc_type, exc_val, exc_tb):
         # Wait until SBI is marked as FINISHED or CANCELLED
         LOG.info('Waiting for SBI to end')
         for txn in self._config.txn():
