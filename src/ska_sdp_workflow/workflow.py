@@ -316,6 +316,7 @@ class RealTimePhase:
     def deploy(self, d_name=None, d_type=None, d_chart=None):
         """Deploy Execution Engine."""
 
+        LOG.info("Inside the deploy method")
         if d_name is not None:
             deploy_id = 'proc-{}-{}}'.format(self._pb_id, d_name)
             LOG.info(deploy_id)
@@ -335,17 +336,17 @@ class RealTimePhase:
 
         :returns: config transaction"""
 
+        LOG.info("Wait loop method")
         for txn in self._config.txn():
             if not txn.is_processing_block_owner(self._pb_id):
                 LOG.info('Lost ownership of the processing block')
-                #raise an exception
                 break
+                #raise an exception
 
             # Check if the pb state is set to finished
             pb_state = txn.get_processing_block_state(self._pb_id)
             if pb_state in ['FINISHED', 'CANCELLED']:
                 LOG.info('PB STATE is  %s', pb_state)
-                # pass
                 break
                 # raise an exception
 
@@ -354,7 +355,9 @@ class RealTimePhase:
     def __exit__(self, exc_type, exc_val, exc_tb):
         # Wait until SBI is marked as FINISHED or CANCELLED
 
+        LOG.info("Inside exit method")
         for txn in self.wait_loop():
+            LOG.info("Waiting in the for loop of wait loop")
 
             sbi = txn.get_scheduling_block(self._sbi_id)
             status = sbi.get('status')
@@ -368,16 +371,14 @@ class RealTimePhase:
                 txn.update_processing_block_state(self._pb_id, state)
                 break
 
-        # Clean up deployment.
-        if self._deploy is not None:
-            for txn in self._config.txn():
-                txn.delete_deployment(self._deploy)
+        # # Clean up deployment.
+        # if self._deploy is not None:
+        #     for txn in self._config.txn():
+        #         txn.delete_deployment(self._deploy)
 
         # Close connection to config DB
         LOG.info('Closing connection to config DB')
         self._config.close()
 
-        # This is for testing
-        exit(0)
-
-        # ComputeStage().delete_deploy()
+        # # This is for testing
+        # exit(0)
