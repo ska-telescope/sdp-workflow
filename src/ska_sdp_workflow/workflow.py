@@ -51,58 +51,33 @@ class ProcessingBlock:
         # Scheduling Block Instance ID
         self._sbi_id = pb.sbi_id
 
-    def id(self):
-        """Get processing block id
 
-        :returns: processing block id
-        """
-        return self._pb_id
+    #
+    #     # return self._config.txn()
+    #
+    # def is_finished(self, txn):
+    #     """Checks if the pb is finished.
+    #
+    #     :param: txn: config transaction
+    #
+    #     """
+    #
+    #     # Check if the ownership is lost
+    #     if not txn.is_processing_block_owner(self._pb_id):
+    #         LOG.info('Lost ownership of the processing block')
+    #
+    #
+    #     else:
+    #         finished = False
+    #
+    #     return finished
 
-
-
-    def wait_loop(self):
-        """Wait loop.
-
-        :returns: config transaction"""
-
-        for txn in self._config.txn():
-            if not txn.is_processing_block_owner(self._pb_id):
-                LOG.info('Lost ownership of the processing block')
-                #raise an exception
-
-            # Check if the pb state is set to finished
-            pb_state = txn.get_processing_block_state(self._pb_id)
-            if pb_state in ['FINISHED', 'CANCELLED']:
-                pass
-                # raise an exception
-
-            yield txn
-
-        # return self._config.txn()
-
-    def is_finished(self, txn):
-        """Checks if the pb is finished.
-
-        :param: txn: config transaction
-
-        """
-
-        # Check if the ownership is lost
-        if not txn.is_processing_block_owner(self._pb_id):
-            LOG.info('Lost ownership of the processing block')
-
-
-        else:
-            finished = False
-
-        return finished
-
-    def exit(self, txn, message):
-        state = txn.get_processing_block_state(self._pb_id)
-        state['status'] = 'CANCELLED'
-        txn.update_processing_block_state(self._pb_id, state)
-        LOG.info(message)
-        exit(1)
+    # def exit(self, txn, message):
+    #     state = txn.get_processing_block_state(self._pb_id)
+    #     state['status'] = 'CANCELLED'
+    #     txn.update_processing_block_state(self._pb_id, state)
+    #     LOG.info(message)
+    #     exit(1)
 
     def receive_addresses(self, scan_types):
         """Generate receive addresses and update it in the processing block state.
@@ -153,10 +128,6 @@ class ProcessingBlock:
 
         return scan_types
 
-    @property
-    def sbi(self):
-        return SchedulingBlockInstance(self._sbi_id, self._config)
-
     def request_buffer(self, size, tags):
 
         return BufferRequest(size, tags)
@@ -166,8 +137,15 @@ class ProcessingBlock:
         return ComputeRequest(phases)
 
     def create_phase(self, name, reservation):
-
-        return Phase(name, reservation, self._config, self._pb_id, self._sbi_id)
+        """Create either real-time or batch work phase."""
+        workflow = self._pb.workflow
+        if workflow['type'] == 'realtime':
+            LOG.debug("Creating Real-time work phase")
+            return RealTimePhase(name, reservation, self._config,
+                                 self._pb_id, self._sbi_id)
+        else:
+            LOG.debug("Creating batch work phase")
+            return BatchPhase()
 
     # -------------------------------------
     # Private methods
@@ -207,29 +185,29 @@ class ProcessingBlock:
         return receive_addresses
 
 
-class SchedulingBlockInstance:
-    def __init__(self, sbi_id, config):
-        """Init"""
-        self._sbi_id = sbi_id
-        self._config = config
-
-    def is_finished(self):
-        for txn in self._config.txn():
-            sbi = txn.get_scheduling_block(self._sbi_id)
-            status = sbi.get('status')
-            if status in ['FINISHED']:
-                LOG.info('SBI is %s', status)
-
-                # Set state to indicate processing has ended
-                LOG.info('Setting status to %s', status)
-                state = txn.get_processing_block_state(self._pb_id)
-                state['status'] = status
-                txn.update_processing_block_state(self._pb_id, state)
-                finished = True
-            else:
-                finished = False
-
-            return finished
+# class SchedulingBlockInstance:
+#     def __init__(self, sbi_id, config):
+#         """Init"""
+#         self._sbi_id = sbi_id
+#         self._config = config
+#
+#     def is_finished(self):
+#         for txn in self._config.txn():
+#             sbi = txn.get_scheduling_block(self._sbi_id)
+#             status = sbi.get('status')
+#             if status in ['FINISHED']:
+#                 LOG.info('SBI is %s', status)
+#
+#                 # Set state to indicate processing has ended
+#                 LOG.info('Setting status to %s', status)
+#                 state = txn.get_processing_block_state(self._pb_id)
+#                 state['status'] = status
+#                 txn.update_processing_block_state(self._pb_id, state)
+#                 finished = True
+#             else:
+#                 finished = False
+#
+#             return finished
 
 
 class BufferRequest:
@@ -243,7 +221,7 @@ class ComputeRequest:
         """Init"""
 
 
-# class Deployment:
+# # class Deployment:
 #     # def __init__(self, deploy_id, deploy_type, deploy_chart,
 #     #              config, pb_id, sbi_id):
 #     def __init__(self, config, pb_id, sbi_id):
@@ -252,11 +230,11 @@ class ComputeRequest:
 #         # self._deploy_id = deploy_id
 #         self._pb_id = pb_id
 #         self._sbi_id = sbi_id
-
-        # if deploy_type and deploy_chart is not None:
-        #     self._deploy = ska_sdp_config.Deployment(deploy_id, deploy_type, deploy_chart)
-        #     for txn in self._config.txn():
-        #         txn.create_deployment(self._deploy)
+#
+#         if deploy_type and deploy_chart is not None:
+#             self._deploy = ska_sdp_config.Deployment(deploy_id, deploy_type, deploy_chart)
+#             for txn in self._config.txn():
+#                 txn.create_deployment(self._deploy)
 
     # def is_finished(self, txn):
     #     """Check if the compute stage finished."""
@@ -285,7 +263,14 @@ class ComputeRequest:
     #         txn.delete_deployment(self._deploy)
 
 
-class Phase:
+
+
+class BatchPhase:
+    def __init__(self):
+        """Init"""
+
+
+class RealTimePhase:
     def __init__(self, name, list_reservations, config, pb_id, sbi_id):
         """Init"""
         self._name = name
@@ -293,6 +278,7 @@ class Phase:
         self._config = config
         self._pb_id = pb_id
         self._sbi_id = sbi_id
+        self._deploy = None
         # self._list_deployment = []
 
     def __enter__(self):
@@ -309,7 +295,6 @@ class Phase:
             if pb_state or sbi_status in ['FINISHED', 'CANCELLED']:
                 LOG.info('PB is %s', pb_state)
                 LOG.info('SBI is %s', sbi_status)
-
 
         # Set state to indicate workflow is waiting for resources
         LOG.info('Setting status to WAITING')
@@ -328,35 +313,64 @@ class Phase:
                 break
             txn.loop(wait=True)
 
-
-    def deploy(self):
+    def deploy(self, d_name=None, d_type=None, d_chart=None):
         """Deploy Execution Engine."""
 
-        # Set state to indicate processing has started
-        LOG.info('Setting status to RUNNING')
-        for txn in self._config.txn():
-            state = txn.get_processing_block_state(self._pb_id)
-            state['status'] = 'RUNNING'
-            txn.update_processing_block_state(self._pb_id, state)
+        if d_name is not None:
+            deploy_id = 'proc-{}-{}}'.format(self._pb_id, d_name)
+            self._deploy = ska_sdp_config.Deployment(deploy_id, d_type, d_chart)
+            for txn in self._config.txn():
+                txn.create_deployment(self._deploy)
+        else:
+            # Set state to indicate processing has started
+            LOG.info('Setting status to RUNNING')
+            for txn in self._config.txn():
+                state = txn.get_processing_block_state(self._pb_id)
+                state['status'] = 'RUNNING'
+                txn.update_processing_block_state(self._pb_id, state)
 
+    def wait_loop(self):
+        """Wait loop.
+
+        :returns: config transaction"""
+
+        for txn in self._config.txn():
+            if not txn.is_processing_block_owner(self._pb_id):
+                LOG.info('Lost ownership of the processing block')
+                #raise an exception
+                break
+
+            # Check if the pb state is set to finished
+            pb_state = txn.get_processing_block_state(self._pb_id)
+            if pb_state in ['FINISHED', 'CANCELLED']:
+                LOG.info('PB STATE is  %s', pb_state)
+                # pass
+                break
+                # raise an exception
+
+            yield txn
 
     def __exit__(self, exc_type, exc_val, exc_tb):
         # Wait until SBI is marked as FINISHED or CANCELLED
-        LOG.info('Waiting for SBI to end')
-        for txn in self._config.txn():
+
+        for txn in self.wait_loop():
+
             sbi = txn.get_scheduling_block(self._sbi_id)
             status = sbi.get('status')
             if status in ['FINISHED', 'CANCELLED']:
                 LOG.info('SBI is %s', status)
+                # break
+                # Set state to indicate processing has ended
+                LOG.info('Setting status to %s', status)
+                state = txn.get_processing_block_state(self._pb_id)
+                state['status'] = status
+                txn.update_processing_block_state(self._pb_id, state)
                 break
-            txn.loop(wait=True)
 
-        # Set state to indicate processing has ended
-        LOG.info('Setting status to %s', status)
-        for txn in self._config.txn():
-            state = txn.get_processing_block_state(self._pb_id)
-            state['status'] = status
-            txn.update_processing_block_state(self._pb_id, state)
+        # Clean up deployment.
+        if self._deploy is not None:
+            for txn in self._config.txn():
+                txn.delete_deployment(self._deploy)
 
         # Close connection to config DB
         LOG.info('Closing connection to config DB')
