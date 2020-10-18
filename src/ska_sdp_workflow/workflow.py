@@ -338,19 +338,20 @@ class RealTimePhase:
 
         LOG.info("Wait loop method")
         for txn in self._config.txn():
+            LOG.info("Checking processing block")
             # if not txn.is_processing_block_owner(self._pb_id):
             #     LOG.info('Lost ownership of the processing block')
             #     break
                 #raise an exception
 
-            # Check if the pb state is set to finished
-            pb_state = txn.get_processing_block_state(self._pb_id)
-            if pb_state in ['FINISHED', 'CANCELLED']:
-                LOG.info('PB STATE is  %s', pb_state)
-                break
-            else:
-                LOG.info("PB_STATE - %s", pb_state)
-                # raise an exception
+            # # Check if the pb state is set to finished
+            # pb_state = txn.get_processing_block_state(self._pb_id)
+            # if pb_state in ['FINISHED', 'CANCELLED']:
+            #     LOG.info('PB STATE is  %s', pb_state)
+            #     break
+            # else:
+            #     LOG.info("PB_STATE - %s", pb_state)
+            #     # raise an exception
 
             yield txn
 
