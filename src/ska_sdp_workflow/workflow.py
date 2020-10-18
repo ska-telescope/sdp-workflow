@@ -364,19 +364,19 @@ class RealTimePhase:
 
             sbi = txn.get_scheduling_block(self._sbi_id)
             LOG.info("SBI ID %s", sbi)
-            status = sbi.get('status')
-            LOG.info(status)
-            if status in ['FINISHED', 'CANCELLED']:
-                LOG.info('SBI is %s', status)
-                # break
-                # Set state to indicate processing has ended
-                LOG.info('Setting status to %s', status)
-                state = txn.get_processing_block_state(self._pb_id)
-                state['status'] = status
-                txn.update_processing_block_state(self._pb_id, state)
-                break
-            else:
-                LOG.info("STATUS IS NOT FINISHED OR CANCELLED")
+            # status = sbi.get('status')
+            # LOG.info(status)
+            # if status in ['FINISHED', 'CANCELLED']:
+            #     LOG.info('SBI is %s', status)
+            #     # break
+            #     # Set state to indicate processing has ended
+            #     LOG.info('Setting status to %s', status)
+            #     state = txn.get_processing_block_state(self._pb_id)
+            #     state['status'] = status
+            #     txn.update_processing_block_state(self._pb_id, state)
+            #     break
+            # else:
+            #     LOG.info("STATUS IS NOT FINISHED OR CANCELLED")
 
         # # Clean up deployment.
         # if self._deploy is not None:
@@ -385,7 +385,7 @@ class RealTimePhase:
 
         # Close connection to config DB
         LOG.info('Closing connection to config DB')
-        self._config.close()
+        # self._config.close()
 
         # # This is for testing
         # exit(0)
