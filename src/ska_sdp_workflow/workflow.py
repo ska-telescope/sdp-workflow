@@ -338,9 +338,9 @@ class RealTimePhase:
 
         LOG.info("Wait loop method")
         for txn in self._config.txn():
-            if not txn.is_processing_block_owner(self._pb_id):
-                LOG.info('Lost ownership of the processing block')
-                break
+            # if not txn.is_processing_block_owner(self._pb_id):
+            #     LOG.info('Lost ownership of the processing block')
+            #     break
                 #raise an exception
 
             # Check if the pb state is set to finished
@@ -348,6 +348,8 @@ class RealTimePhase:
             if pb_state in ['FINISHED', 'CANCELLED']:
                 LOG.info('PB STATE is  %s', pb_state)
                 break
+            else:
+                LOG.info("PB_STATE - %s", pb_state)
                 # raise an exception
 
             yield txn
@@ -360,7 +362,9 @@ class RealTimePhase:
             LOG.info("Waiting in the for loop of wait loop")
 
             sbi = txn.get_scheduling_block(self._sbi_id)
+            LOG.info("SBI ID %s", sbi)
             status = sbi.get('status')
+            LOG.info(status)
             if status in ['FINISHED', 'CANCELLED']:
                 LOG.info('SBI is %s', status)
                 # break
@@ -370,6 +374,8 @@ class RealTimePhase:
                 state['status'] = status
                 txn.update_processing_block_state(self._pb_id, state)
                 break
+            else:
+                LOG.info("STATUS IS NOT FINISHED OR CANCELLED")
 
         # # Clean up deployment.
         # if self._deploy is not None:
