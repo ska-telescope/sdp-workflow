@@ -331,6 +331,27 @@ class RealTimePhase:
                 state['status'] = 'RUNNING'
                 txn.update_processing_block_state(self._pb_id, state)
 
+    def is_sbi_finished(self, txn):
+        sbi = txn.get_scheduling_block(self._sbi_id)
+        LOG.info("SBI ID %s", sbi)
+        status = sbi.get('status')
+        LOG.info(status)
+        if status in ['FINISHED', 'CANCELLED']:
+            LOG.info('SBI is %s', status)
+            # break
+            # Set state to indicate processing has ended
+            LOG.info('Setting status to %s', status)
+            state = txn.get_processing_block_state(self._pb_id)
+            state['status'] = status
+            txn.update_processing_block_state(self._pb_id, state)
+            finished = True
+        else:
+            LOG.info("STATUS IS NOT FINISHED OR CANCELLED")
+            finished = False
+
+        return finished
+
+
     def wait_loop(self):
         """Wait loop.
 
@@ -342,41 +363,34 @@ class RealTimePhase:
             # if not txn.is_processing_block_owner(self._pb_id):
             #     LOG.info('Lost ownership of the processing block')
             #     break
-                #raise an exception
-
-            # # Check if the pb state is set to finished
-            # pb_state = txn.get_processing_block_state(self._pb_id)
-            # if pb_state in ['FINISHED', 'CANCELLED']:
-            #     LOG.info('PB STATE is  %s', pb_state)
-            #     break
-            # else:
-            #     LOG.info("PB_STATE - %s", pb_state)
             #     # raise an exception
 
-            yield txn
+            # Check if the pb state is set to finished
+            pb_state = txn.get_processing_block_state(self._pb_id)
+            if pb_state in ['FINISHED', 'CANCELLED']:
+                LOG.info('PB STATE is  %s', pb_state)
+                break
+            else:
+                LOG.info("PB_STATE - %s", pb_state)
+                # raise an exception
+
+            if self.is_sbi_finished(txn):
+                break
+
+            txn.loop(wait=True)
+            # yield txn
+
 
     def __exit__(self, exc_type, exc_val, exc_tb):
         # Wait until SBI is marked as FINISHED or CANCELLED
 
         LOG.info("Inside exit method")
-        for txn in self.wait_loop():
-            LOG.info("Waiting in the for loop of wait loop")
+        self.wait_loop()
 
-            sbi = txn.get_scheduling_block(self._sbi_id)
-            LOG.info("SBI ID %s", sbi)
-            # status = sbi.get('status')
-            # LOG.info(status)
-            # if status in ['FINISHED', 'CANCELLED']:
-            #     LOG.info('SBI is %s', status)
-            #     # break
-            #     # Set state to indicate processing has ended
-            #     LOG.info('Setting status to %s', status)
-            #     state = txn.get_processing_block_state(self._pb_id)
-            #     state['status'] = status
-            #     txn.update_processing_block_state(self._pb_id, state)
-            #     break
-            # else:
-            #     LOG.info("STATUS IS NOT FINISHED OR CANCELLED")
+        # for txn in self.wait_loop():
+        #     LOG.info("Waiting in the for loop of wait loop")
+
+
 
         # # Clean up deployment.
         # if self._deploy is not None:
@@ -385,7 +399,7 @@ class RealTimePhase:
 
         # Close connection to config DB
         LOG.info('Closing connection to config DB')
-        # self._config.close()
+        self._config.close()
 
         # # This is for testing
         # exit(0)
