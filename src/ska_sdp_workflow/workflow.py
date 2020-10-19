@@ -417,11 +417,6 @@ class Phase:
             if self._workflow_type == 'realtime':
                 LOG.info("Real-time Workflow")
                 if self.is_sbi_finished(txn):
-                    # Set state to indicate processing has ended
-                    LOG.info('Setting status to FINISHED')
-                    state = txn.get_processing_block_state(self._pb_id)
-                    state['status'] = 'FINISHED'
-                    txn.update_processing_block_state(self._pb_id, state)
                     break
 
             txn.loop(wait=True)
@@ -429,6 +424,15 @@ class Phase:
     def __exit__(self, exc_type, exc_val, exc_tb):
         # Wait until SBI is marked as FINISHED or CANCELLED
         self.wait_loop()
+
+        # Update Processing Block State
+        for txn in self._config.txn():
+            # Set state to indicate processing has ended
+            LOG.info('Setting status to FINISHED')
+            state = txn.get_processing_block_state(self._pb_id)
+            state['status'] = 'FINISHED'
+            txn.update_processing_block_state(self._pb_id, state)
+
 
         # Clean up deployment.
         if self._deploy_id is not None:
