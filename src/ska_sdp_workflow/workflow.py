@@ -101,13 +101,9 @@ class ProcessingBlock:
 
         return BufferRequest(size, tags)
 
-    def request_compute(self, phases):
-
-        return ComputeRequest(phases)
-
     def create_phase(self, name, reservation):
         """Create work phase."""
-        workflow= self._pb.workflow
+        workflow = self._pb.workflow
         workflow_type = workflow['type']
         return Phase(name, reservation, self._config,
                      self._pb_id, self._sbi_id, workflow_type)
@@ -156,10 +152,6 @@ class BufferRequest:
         LOG.info("Buffer Requested")
 
 
-class ComputeRequest:
-    def __init__(self, phases):
-        """Init"""
-
 class Phase:
     def __init__(self, name, list_reservations, config, pb_id,
                  sbi_id, workflow_type):
@@ -174,10 +166,11 @@ class Phase:
         self._status = None
 
     def __enter__(self):
-        '''Check if the pb is cancelled or sbi is finished and also if the resources are
-        available'''
+        '''Enter'''
 
         # Create an event loop here
+        if self._workflow_type == 'batch':
+            LOG.info("Start event loop")
 
         # Check if the pb is cancelled or sbi is finished or cancelled
         for txn in self._config.txn():
@@ -188,6 +181,7 @@ class Phase:
                 sbi = txn.get_scheduling_block(self._sbi_id)
                 sbi_status = sbi.get('status')
                 if pb_status or sbi_status in ['FINISHED', 'CANCELLED']:
+                    # raise exception
                     LOG.info('PB is %s', pb_status)
                     LOG.info('SBI is %s', sbi_status)
             else:
@@ -195,6 +189,7 @@ class Phase:
                 pb_status = pb_state.get('status')
                 if pb_status in ['FINISHED', 'CANCELLED']:
                     LOG.info('PB is %s', pb_state)
+                    # raise exception
 
         # Set state to indicate workflow is waiting for resources
         LOG.info('Setting status to WAITING')
@@ -262,19 +257,18 @@ class Phase:
             if self._deploy_id not in list_deployments:
                 LOG.info("Deployment Finished")
 
-    def is_sbi_finished(self):
-        for txn in self._config.txn():
-            sbi = txn.get_scheduling_block(self._sbi_id)
-            LOG.info("SBI ID %s", sbi)
-            status = sbi.get('status')
-            if status in ['FINISHED', 'CANCELLED']:
-                LOG.info('SBI is %s', status)
-                self._status = status
-                # if cancelled raise exception
-                finished = True
+    def is_sbi_finished(self, txn):
+        sbi = txn.get_scheduling_block(self._sbi_id)
+        LOG.info("SBI ID %s", sbi)
+        status = sbi.get('status')
+        if status in ['FINISHED', 'CANCELLED']:
+            LOG.info('SBI is %s', status)
+            self._status = status
+            # if cancelled raise exception
+            finished = True
 
-            else:
-                finished = False
+        else:
+            finished = False
 
         return finished
 
@@ -312,15 +306,18 @@ class Phase:
                 # raise exception
                 break
 
-            LOG.info("Worklow Type %s", self._workflow_type)
             if self._workflow_type == 'realtime':
-                LOG.info("Real-time Workflow")
-                if self.is_sbi_finished():
+                if self.is_sbi_finished(txn):
+                    break
+            else:
+                if self.is_deploy_finished(txn):
                     break
 
             txn.loop(wait=True)
 
     def __exit__(self, exc_type, exc_val, exc_tb):
+        """Exit"""
+
         # Wait until SBI is marked as FINISHED or CANCELLED
         self.wait_loop()
 
