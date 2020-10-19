@@ -315,7 +315,7 @@ class Phase:
             LOG.info("Worklow Type %s", self._workflow_type)
             if self._workflow_type == 'realtime':
                 LOG.info("Real-time Workflow")
-                if self.is_sbi_finished(txn):
+                if self.is_sbi_finished():
                     break
 
             txn.loop(wait=True)
