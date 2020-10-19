@@ -183,14 +183,16 @@ class Phase:
             LOG.info("Workflow type %s", self._workflow_type)
             if self._workflow_type == 'realtime':
                 pb_state = txn.get_processing_block_state(self._pb_id)
+                pb_status = pb_state.get('status')
                 sbi = txn.get_scheduling_block(self._sbi_id)
                 sbi_status = sbi.get('status')
-                if pb_state or sbi_status in ['FINISHED', 'CANCELLED']:
-                    LOG.info('PB is %s', pb_state)
+                if pb_status or sbi_status in ['FINISHED', 'CANCELLED']:
+                    LOG.info('PB is %s', pb_status)
                     LOG.info('SBI is %s', sbi_status)
             else:
                 pb_state = txn.get_processing_block_state(self._pb_id)
-                if pb_state in ['FINISHED', 'CANCELLED']:
+                pb_status = pb_state.get('status')
+                if pb_status in ['FINISHED', 'CANCELLED']:
                     LOG.info('PB is %s', pb_state)
 
         # Set state to indicate workflow is waiting for resources
@@ -248,20 +250,10 @@ class Phase:
                 deploy = txn.get_deployment(deploy_id)
                 txn.delete_deployment(deploy)
                 self._deploy_id = None
-
-                # Set state to indicate processing has ended
-                LOG.info('Setting status to FINISHED')
-                state = txn.get_processing_block_state(self._pb_id)
-                state['status'] = 'FINISHED'
-                txn.update_processing_block_state(self._pb_id, state)
+                self.update_pb_state()
         else:
             LOG.info("Deployment Removed")
-            for txn in self._config.txn():
-                # Set state to indicate processing has ended
-                LOG.info('Setting status to FINISHED')
-                state = txn.get_processing_block_state(self._pb_id)
-                state['status'] = 'FINISHED'
-                txn.update_processing_block_state(self._pb_id, state)
+            self.update_pb_state()
 
     def is_deploy_finished(self, txn):
         list_deployments = txn.list_deployments()
@@ -283,6 +275,17 @@ class Phase:
 
         return finished
 
+    def update_pb_state(self, status=None):
+        """Update Processing Block State."""
+
+        for txn in self._config.txn():
+            # Set state to indicate processing has ended
+            LOG.info('Setting status to FINISHED')
+            state = txn.get_processing_block_state(self._pb_id)
+            if status is None:
+                state['status'] = 'FINISHED'
+            txn.update_processing_block_state(self._pb_id, state)
+
     def wait_loop(self):
         """Wait loop.
 
@@ -292,8 +295,9 @@ class Phase:
 
             # Check if the pb state is set to finished
             pb_state = txn.get_processing_block_state(self._pb_id)
-            LOG.info("PB_STATE - %s", pb_state)
-            if pb_state in ['FINISHED', 'CANCELLED']:
+            pb_status = pb_state.get('status')
+            LOG.info("PB_STATE - %s", pb_status)
+            if pb_status in ['FINISHED', 'CANCELLED']:
                 LOG.info("Processing Block Finished")
                 # if cancelled raise exception
                 break
@@ -307,6 +311,7 @@ class Phase:
             if self._workflow_type == 'realtime':
                 LOG.info("Real-time Workflow")
                 if self.is_sbi_finished(txn):
+                    self.update_pb_state()
                     break
 
             txn.loop(wait=True)
@@ -314,15 +319,6 @@ class Phase:
     def __exit__(self, exc_type, exc_val, exc_tb):
         # Wait until SBI is marked as FINISHED or CANCELLED
         self.wait_loop()
-
-        # Update Processing Block State
-        for txn in self._config.txn():
-            # Set state to indicate processing has ended
-            LOG.info('Setting status to FINISHED')
-            state = txn.get_processing_block_state(self._pb_id)
-            state['status'] = 'FINISHED'
-            txn.update_processing_block_state(self._pb_id, state)
-
 
         # Clean up deployment.
         if self._deploy_id is not None:
