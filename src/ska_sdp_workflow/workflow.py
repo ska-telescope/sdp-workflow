@@ -388,12 +388,6 @@ class Phase:
         if status in ['FINISHED', 'CANCELLED']:
             LOG.info('SBI is %s', status)
             # if cancelled raise exception
-
-            # Set state to indicate processing has ended
-            LOG.info('Setting status to %s', status)
-            state = txn.get_processing_block_state(self._pb_id)
-            state['status'] = status
-            txn.update_processing_block_state(self._pb_id, state)
             finished = True
         else:
             finished = False
@@ -423,9 +417,11 @@ class Phase:
             if self._workflow_type == 'realtime':
                 LOG.info("Real-time Workflow")
                 if self.is_sbi_finished(txn):
-                    # Just for testing
+                    # Set state to indicate processing has ended
+                    LOG.info('Setting status to FINISHED')
                     state = txn.get_processing_block_state(self._pb_id)
-                    LOG.info("Current ProcessingBlock state %s", state)
+                    state['status'] = 'FINISHED'
+                    txn.update_processing_block_state(self._pb_id, state)
                     break
 
             txn.loop(wait=True)
