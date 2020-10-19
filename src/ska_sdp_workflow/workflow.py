@@ -267,8 +267,7 @@ class RealTimePhase:
         self._config = config
         self._pb_id = pb_id
         self._sbi_id = sbi_id
-        self._deploy = None
-        # self._list_deployment = []
+        self._deploy_id = None
 
     def __enter__(self):
         '''Check if the pb is cancelled or sbi is finished and also if the resources are
@@ -302,16 +301,23 @@ class RealTimePhase:
                 break
             txn.loop(wait=True)
 
-    def deploy(self, d_name=None, d_type=None, d_chart=None):
-        """Deploy Execution Engine."""
+    def ee_deploy(self, deploy_name, deploy_type, image):
+        """Deploy Dask execution engine.
 
-        LOG.info("Inside the deploy method")
-        if d_name is not None:
-            deploy_id = 'proc-{}-{}}'.format(self._pb_id, d_name)
-            LOG.info(deploy_id)
-            self._deploy = ska_sdp_config.Deployment(deploy_id, d_type, d_chart)
+        :param deploy_name: processing block ID
+        :param deploy_type: Deploy type
+        :param image: Docker image to deploy
+
+        """
+        # Make deployment
+        if deploy_name is not None:
+            LOG.info("EE Deploy")
+            self._deploy_id = 'proc-{}-{}}'.format(self._pb_id, deploy_name)
+            LOG.info(self._deploy_id)
+            deploy = ska_sdp_config.Deployment(self._deploy_id,
+                                               deploy_type, image)
             for txn in self._config.txn():
-                txn.create_deployment(self._deploy)
+                txn.create_deployment(deploy)
         else:
             # Set state to indicate processing has started
             LOG.info('Setting status to RUNNING')
@@ -319,6 +325,16 @@ class RealTimePhase:
                 state = txn.get_processing_block_state(self._pb_id)
                 state['status'] = 'RUNNING'
                 txn.update_processing_block_state(self._pb_id, state)
+
+    def ee_remove(self, deploy_id):
+        """Remove Dask EE deployment.
+
+        :param deploy_id: deployment ID
+
+        """
+        for txn in self._config.txn():
+            deploy = txn.get_deployment(deploy_id)
+            txn.delete_deployment(deploy)
 
     def is_sbi_finished(self, txn):
         sbi = txn.get_scheduling_block(self._sbi_id)
@@ -369,9 +385,9 @@ class RealTimePhase:
         self.wait_loop()
 
         # Clean up deployment.
-        if self._deploy is not None:
-            for txn in self._config.txn():
-                txn.delete_deployment(self._deploy)
+        if self._deploy_id is not None:
+            LOG.info("Deploy ID %s", self._deploy_id)
+            self.ee_remove(self._deploy_id)
 
         # Close connection to config DB
         LOG.info('Closing connection to config DB')
