@@ -2,9 +2,6 @@
 # pylint: disable=invalid-name
 # pylint: disable=too-few-public-methods
 
-import sys
-import time
-import os
 import logging
 import sys
 # import ska.logging
@@ -349,7 +346,8 @@ class RealTimePhase:
         LOG.info(status)
         if status in ['FINISHED', 'CANCELLED']:
             LOG.info('SBI is %s', status)
-            # break
+            # if cancelled raise exception
+
             # Set state to indicate processing has ended
             LOG.info('Setting status to %s', status)
             state = txn.get_processing_block_state(self._pb_id)
@@ -372,11 +370,13 @@ class RealTimePhase:
             LOG.info("Checking processing block")
             if not txn.is_processing_block_owner(self._pb_id):
                 LOG.info('Lost ownership of the processing block')
+                # raise exception
                 break
 
             # Check if the pb state is set to finished
             pb_state = txn.get_processing_block_state(self._pb_id)
             if pb_state in ['FINISHED', 'CANCELLED']:
+                # if cancelled raise exception
                 break
 
             if self.is_sbi_finished(txn):
