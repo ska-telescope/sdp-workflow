@@ -171,6 +171,7 @@ class Phase:
         self._sbi_id = sbi_id
         self._workflow_type = workflow_type
         self._deploy_id = None
+        self._status = None
 
     def __enter__(self):
         '''Check if the pb is cancelled or sbi is finished and also if the resources are
@@ -261,18 +262,19 @@ class Phase:
             if self._deploy_id not in list_deployments:
                 LOG.info("Deployment Finished")
 
-    def is_sbi_finished(self, txn):
-        sbi = txn.get_scheduling_block(self._sbi_id)
-        LOG.info("SBI ID %s", sbi)
-        status = sbi.get('status')
-        if status in ['FINISHED', 'CANCELLED']:
-            LOG.info('SBI is %s', status)
-            # if cancelled raise exception
-            self.update_pb_state()
-            finished = True
+    def is_sbi_finished(self):
+        for txn in self._config.txn():
+            sbi = txn.get_scheduling_block(self._sbi_id)
+            LOG.info("SBI ID %s", sbi)
+            status = sbi.get('status')
+            if status in ['FINISHED', 'CANCELLED']:
+                LOG.info('SBI is %s', status)
+                self._status = status
+                # if cancelled raise exception
+                finished = True
 
-        else:
-            finished = False
+            else:
+                finished = False
 
         return finished
 
@@ -285,6 +287,8 @@ class Phase:
             state = txn.get_processing_block_state(self._pb_id)
             if status is None:
                 state['status'] = 'FINISHED'
+            else:
+                state['status'] = self._status
             txn.update_processing_block_state(self._pb_id, state)
 
     def wait_loop(self):
@@ -319,6 +323,10 @@ class Phase:
     def __exit__(self, exc_type, exc_val, exc_tb):
         # Wait until SBI is marked as FINISHED or CANCELLED
         self.wait_loop()
+
+        if self._workflow_type == 'realtime':
+            # Update Processing Block
+            self.update_pb_state(self._status)
 
         # Clean up deployment.
         if self._deploy_id is not None:
