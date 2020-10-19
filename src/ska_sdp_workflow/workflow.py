@@ -283,7 +283,6 @@ class Phase:
         self._sbi_id = sbi_id
         self._workflow_type = workflow_type
         self._deploy_id = None
-        self._list_deployments = []
 
     def __enter__(self):
         '''Check if the pb is cancelled or sbi is finished and also if the resources are
@@ -301,10 +300,10 @@ class Phase:
                 if pb_state or sbi_status in ['FINISHED', 'CANCELLED']:
                     LOG.info('PB is %s', pb_state)
                     LOG.info('SBI is %s', sbi_status)
-                else:
-                    pb_state = txn.get_processing_block_state(self._pb_id)
-                    if pb_state in ['FINISHED', 'CANCELLED']:
-                        LOG.info('PB is %s', pb_state)
+            else:
+                pb_state = txn.get_processing_block_state(self._pb_id)
+                if pb_state in ['FINISHED', 'CANCELLED']:
+                    LOG.info('PB is %s', pb_state)
 
         # Set state to indicate workflow is waiting for resources
         LOG.info('Setting status to WAITING')
@@ -386,7 +385,6 @@ class Phase:
         sbi = txn.get_scheduling_block(self._sbi_id)
         LOG.info("SBI ID %s", sbi)
         status = sbi.get('status')
-        LOG.info(status)
         if status in ['FINISHED', 'CANCELLED']:
             LOG.info('SBI is %s', status)
             # if cancelled raise exception
@@ -425,6 +423,9 @@ class Phase:
             if self._workflow_type == 'realtime':
                 LOG.info("Real-time Workflow")
                 if self.is_sbi_finished(txn):
+                    # Just for testing
+                    state = txn.get_processing_block_state(self._pb_id)
+                    LOG.info("Current ProcessingBlock state %s", state)
                     break
 
             txn.loop(wait=True)
