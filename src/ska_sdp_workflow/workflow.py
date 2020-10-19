@@ -268,6 +268,7 @@ class Phase:
         if status in ['FINISHED', 'CANCELLED']:
             LOG.info('SBI is %s', status)
             # if cancelled raise exception
+            self.update_pb_state()
             finished = True
 
         else:
@@ -311,7 +312,6 @@ class Phase:
             if self._workflow_type == 'realtime':
                 LOG.info("Real-time Workflow")
                 if self.is_sbi_finished(txn):
-                    self.update_pb_state()
                     break
 
             txn.loop(wait=True)
