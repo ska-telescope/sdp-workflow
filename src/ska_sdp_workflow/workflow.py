@@ -301,7 +301,7 @@ class RealTimePhase:
                 break
             txn.loop(wait=True)
 
-    def ee_deploy(self, deploy_name, deploy_type, image):
+    def ee_deploy(self, deploy_name=None, deploy_type=None, image=None):
         """Deploy Dask execution engine.
 
         :param deploy_name: processing block ID
@@ -312,12 +312,18 @@ class RealTimePhase:
         # Make deployment
         if deploy_name is not None:
             LOG.info("EE Deploy")
-            self._deploy_id = 'proc-{}-{}}'.format(self._pb_id, deploy_name)
+            self._deploy_id = 'proc-{}-{}'.format(self._pb_id, deploy_name)
             LOG.info(self._deploy_id)
             deploy = ska_sdp_config.Deployment(self._deploy_id,
                                                deploy_type, image)
             for txn in self._config.txn():
                 txn.create_deployment(deploy)
+
+            for txn in self._config.txn():
+                list_deployments = txn.list_deployments()
+                if self._deploy_id not in list_deployments:
+                    # raise exception
+                    LOG.info("Deployment Not Created")
         else:
             # Set state to indicate processing has started
             LOG.info('Setting status to RUNNING')
