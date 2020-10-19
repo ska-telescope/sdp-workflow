@@ -160,118 +160,6 @@ class ComputeRequest:
     def __init__(self, phases):
         """Init"""
 
-
-class BatchPhase:
-    def __init__(self, name, list_reservations, config, pb_id):
-        """Init"""
-        self._name = name
-        self._reservations = list_reservations
-        self._config = config
-        self._pb_id = pb_id
-        self._deploy_id = None
-        self._list_deployment = []
-
-    def __enter__(self):
-        '''Check if the pb is cancelled or sbi is finished and also if the resources are
-        available'''
-
-        # Create an event loop here
-
-        # Set state to indicate workflow is waiting for resources
-        LOG.info('Setting status to WAITING')
-        for txn in self._config.txn():
-            state = txn.get_processing_block_state(self._pb_id)
-            state['status'] = 'WAITING'
-            txn.update_processing_block_state(self._pb_id, state)
-
-        # Wait for resources_available to be true
-        LOG.info('Waiting for resources to be available')
-        for txn in self._config.txn():
-            state = txn.get_processing_block_state(self._pb_id)
-            ra = state.get('resources_available')
-            if ra is not None and ra:
-                LOG.info('Resources are available')
-                break
-            txn.loop(wait=True)
-
-    def ee_deploy(self, deploy_name=None, deploy_type=None, image=None):
-        """Deploy Dask execution engine.
-
-        :param deploy_name: processing block ID
-        :param deploy_type: Deploy type
-        :param image: Docker image to deploy
-
-        """
-        # Make deployment
-        if deploy_name is not None:
-            LOG.info("EE Deploy")
-            self._deploy_id = 'proc-{}-{}'.format(self._pb_id, deploy_name)
-            LOG.info(self._deploy_id)
-            deploy = ska_sdp_config.Deployment(self._deploy_id,
-                                               deploy_type, image)
-            for txn in self._config.txn():
-                txn.create_deployment(deploy)
-
-            for txn in self._config.txn():
-                list_deployments = txn.list_deployments()
-                if self._deploy_id not in list_deployments:
-                    # raise exception
-                    LOG.info("Deployment Not Created")
-        else:
-            # Set state to indicate processing has started
-            LOG.info('Setting status to RUNNING')
-            for txn in self._config.txn():
-                state = txn.get_processing_block_state(self._pb_id)
-                state['status'] = 'RUNNING'
-                txn.update_processing_block_state(self._pb_id, state)
-
-    def ee_remove(self, deploy_id):
-        """Remove Dask EE deployment.
-
-        :param deploy_id: deployment ID
-
-        """
-        for txn in self._config.txn():
-            deploy = txn.get_deployment(deploy_id)
-            txn.delete_deployment(deploy)
-
-    def wait_loop(self):
-        """Wait loop.
-
-        :returns: config transaction"""
-
-        LOG.info("Wait loop method")
-        for txn in self._config.txn():
-            LOG.info("Checking processing block")
-            if not txn.is_processing_block_owner(self._pb_id):
-                LOG.info('Lost ownership of the processing block')
-                break
-
-            # Check if the pb state is set to finished
-            pb_state = txn.get_processing_block_state(self._pb_id)
-            if pb_state in ['FINISHED', 'CANCELLED']:
-                break
-
-            # LOG.info(self._list_deployment)
-            # for dpl in self._list_deployment:
-            #     deploy_lists = txn.list_deployments()
-            #     if self._deploy_id not in deploy_lists:
-            #         LOG.info("No deployment inside the current list")
-            #         break
-
-            txn.loop(wait=True)
-
-    def __exit__(self, exc_type, exc_val, exc_tb):
-        # Wait until SBI is marked as FINISHED or CANCELLED
-
-        LOG.info("Inside exit method")
-        self.wait_loop()
-
-        # Close connection to config DB
-        LOG.info('Closing connection to config DB')
-        self._config.close()
-
-
 class Phase:
     def __init__(self, name, list_reservations, config, pb_id,
                  sbi_id, workflow_type):
@@ -389,6 +277,7 @@ class Phase:
             LOG.info('SBI is %s', status)
             # if cancelled raise exception
             finished = True
+
         else:
             finished = False
 
@@ -403,6 +292,7 @@ class Phase:
 
             # Check if the pb state is set to finished
             pb_state = txn.get_processing_block_state(self._pb_id)
+            LOG.info("PB_STATE - %s", pb_state)
             if pb_state in ['FINISHED', 'CANCELLED']:
                 LOG.info("Processing Block Finished")
                 # if cancelled raise exception
