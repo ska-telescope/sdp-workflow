@@ -218,14 +218,8 @@ class Phase:
         thread.start()
 
     def _set_status(self):
-        """Set attributes based on configuration.
+        """watch for changes to configuration and loop"""
 
-        if `loop` is `True`, it acts as an event loop to watch for changes to
-        the configuration. If `loop` is `False` it makes a single pass.
-
-        :param loop: watch for changes to configuration and loop
-
-        """
         for txn in self._config.txn():
             LOG.info("Check for changes in the config db")
             state = txn.get_processing_block_state(self._pb_id)
@@ -235,7 +229,7 @@ class Phase:
                 LOG.info('Inside event loop PB_STATUS is %s', pb_status)
                 break
             else:
-                LOG.info("WAITING FOR PB STATUS TO CHANGE")
+                LOG.info("Waiting for pb to change")
 
             if not txn.is_processing_block_owner(self._pb_id):
                 LOG.info('Lost ownership of the processing block')
@@ -243,7 +237,6 @@ class Phase:
                 break
 
             txn.loop(wait=True)
-
 
     def ee_deploy(self, deploy_name=None, deploy_type=None, image=None):
         """Deploy Dask execution engine.
@@ -356,8 +349,8 @@ class Phase:
 
             # Update Processing Block
             self.update_pb_state(self._status)
-        else:
-            self.is_deploy_finished()
+        # else:
+        #     self.is_deploy_finished()
 
         # Clean up deployment.
         if self._deploy_id is not None:
