@@ -7,7 +7,7 @@ import sys
 import threading
 # import ska.logging
 import ska_sdp_config
-
+import queue
 
 # ska.logging.configure_logging()
 LOG = logging.getLogger('worklow')
@@ -164,16 +164,11 @@ class Phase:
         self._sbi_id = sbi_id
         self._workflow_type = workflow_type
         self._deploy_id = None
+        # self._deploy_id_list = []
         self._status = None
 
     def __enter__(self):
         '''Enter'''
-
-        # Create an event loop here
-        if self._workflow_type == 'batch':
-            # Start event loop
-            self._event_loop = self._start_event_loop()
-            LOG.info("Event loop started")
 
         # Check if the pb is cancelled or sbi is finished or cancelled
         for txn in self._config.txn():
@@ -209,6 +204,12 @@ class Phase:
                 LOG.info('Resources are available')
                 break
             txn.loop(wait=True)
+
+        # Create an event loop here
+        if self._workflow_type == 'batch':
+            # Start event loop
+            self._event_loop = self._start_event_loop()
+            LOG.info("Event loop started")
 
     def _start_event_loop(self):
         """Start event loop"""
@@ -340,9 +341,37 @@ class Phase:
 
             txn.loop(wait=True)
 
+    def process_to_do(self, processes):
+
+        # spawn a pool of thread, and pass them queue instance
+        q = queue.Queue()
+
+        t = ThreadUrl(queue)
+        t.setDaemon(True)
+        t.start()
+
+        for thread in threading.enumerate():
+            print(thread.name)
+
+        for process in processes:
+            LOG.info(process)
+            queue.put(process)
+
+        while not q.empty():
+            LOG.info("Queue is not empty")
+        else:
+            if q.empty():
+                q.join()
+
+        LOG.info("Processing Done")
+
+
+
+
     def __exit__(self, exc_type, exc_val, exc_tb):
         """Exit"""
 
+        LOG.info("Going to exit now")
         # Wait until SBI is marked as FINISHED or CANCELLED
         if self._workflow_type == 'realtime':
             self.wait_loop()
@@ -356,6 +385,22 @@ class Phase:
         if self._deploy_id is not None:
             self.ee_remove(self._deploy_id)
 
-        # Close connection to config DB
-        LOG.info('Closing connection to config DB')
-        self._config.close()
+        # # Close connection to config DB
+        # LOG.info('Closing connection to config DB')
+        # self._config.close()
+
+
+
+class ThreadUrl(threading.Thread):
+  """Threaded Url Grab"""
+  def __init__(self, queue):
+    threading.Thread.__init__(self)
+    self.queue = queue
+
+  def run(self):
+    while True:
+        task = self.queue.get(block=True, timeout=1)
+        func = task[0]
+        args = task[1:]
+        func(*args)
+        self.queue.task_done()
