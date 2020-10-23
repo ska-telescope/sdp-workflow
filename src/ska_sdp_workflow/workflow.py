@@ -346,7 +346,7 @@ class Phase:
         # spawn a pool of thread, and pass them queue instance
         q = queue.Queue()
 
-        t = ThreadUrl(queue)
+        t = ThreadUrl(q)
         t.setDaemon(True)
         t.start()
 
@@ -355,7 +355,7 @@ class Phase:
 
         for process in processes:
             LOG.info(process)
-            queue.put(process)
+            q.put(process)
 
         while not q.empty():
             LOG.info("Queue is not empty")
