@@ -350,9 +350,6 @@ class Phase:
         t.setDaemon(True)
         t.start()
 
-        for thread in threading.enumerate():
-            print(thread.name)
-
         for process in processes:
             LOG.info(process)
             q.put(process)
@@ -361,9 +358,13 @@ class Phase:
             pass
         # else:
         #     if q.empty():
+        LOG.info("Queue is empty now")
         q.join()
         LOG.info("Processing Done")
         self.update_pb_state()
+
+        for thread in threading.enumerate():
+            print(thread.name)
 
 
 
@@ -398,7 +399,7 @@ class ThreadUrl(threading.Thread):
 
   def run(self):
     while True:
-        task = self.queue.get(block=True, timeout=1)
+        task = self.queue.get()
         func = task[0]
         args = task[1:]
         func(*args)
