@@ -358,13 +358,12 @@ class Phase:
             q.put(process)
 
         while not q.empty():
-            LOG.info("Queue is not empty")
-        else:
-            if q.empty():
-                q.join()
-
+            pass
+        # else:
+        #     if q.empty():
+        q.join()
         LOG.info("Processing Done")
-
+        self.update_pb_state()
 
 
 
