@@ -350,9 +350,11 @@ class Phase:
         t.setDaemon(True)
         t.start()
 
-        for process in processes:
-            LOG.info(process)
-            q.put(process)
+        # for process in processes:
+        #     LOG.info(process)
+        #     q.put(process)
+
+        LOG.info(q)
 
         while not q.empty():
             pass
@@ -363,10 +365,8 @@ class Phase:
         LOG.info("Processing Done")
         self.update_pb_state()
 
-        for thread in threading.enumerate():
-            print(thread.name)
-
-
+        # for thread in threading.enumerate():
+        #     print(thread.name)
 
     def __exit__(self, exc_type, exc_val, exc_tb):
         """Exit"""
