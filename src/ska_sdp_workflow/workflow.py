@@ -350,11 +350,8 @@ class Phase:
         t.setDaemon(True)
         t.start()
 
-        # for process in processes:
-        #     LOG.info(process)
-        #     q.put(process)
-
-        LOG.info(q)
+        for process in processes:
+            q.put(process)
 
         while not q.empty():
             pass
