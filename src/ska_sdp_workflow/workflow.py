@@ -476,6 +476,7 @@ class Phase:
 # Processing Thread Class
 # -------------------------------------
 
+
 class ProcessingThread(threading.Thread):
     """Add process to the queue and execute sequentially."""
 

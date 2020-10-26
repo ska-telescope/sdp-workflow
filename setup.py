@@ -29,7 +29,8 @@ setuptools.setup(
     install_requires=[
         # 'ska-logging',
         'ska-sdp-config>=0.0.11',
-        'ska-sdp-logging>=0.0.6'
+        'ska-sdp-logging>=0.0.6',
+        'distributed==2.8.1'
     ],
     setup_requires=['pytest-runner'],
     tests_require=[
