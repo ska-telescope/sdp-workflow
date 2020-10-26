@@ -279,20 +279,39 @@ class Phase:
                 LOG.info(deploy_id)
                 deploy = ska_sdp_config.Deployment(deploy_id,
                                                    deploy_type, chart)
+            LOG.info(deploy)
             for txn in self._config.txn():
                 txn.create_deployment(deploy)
 
+            LOG.info(self._deploy_id_list)
+
             self._deploy_id_list.append(deploy_id)
 
-            # Wait for scheduler to become available
-            scheduler = deploy_id + '-scheduler.' + \
-                        os.environ['SDP_HELM_NAMESPACE'] + ':8786'
+            LOG.info("Waiting for Scheduler to become available...")
             client = None
-            while client is None:
+            for _ in range(200):
                 try:
-                    client = distributed.Client(scheduler, timeout=1)
-                except:
-                    pass
+                    client = distributed.Client(
+                        deploy_id + '-scheduler.' +
+                        os.environ['SDP_HELM_NAMESPACE'] + ':8786')
+                except Exception as e:
+                    print(e)
+            if client is None:
+                LOG.error("Could not connect to Dask!")
+                # sys.exit(1)
+                # raise exception
+                return client, deploy_id
+            LOG.info("Connected to Dask")
+
+            # # Wait for scheduler to become available
+            # scheduler = deploy_id + '-scheduler.' + \
+            #             os.environ['SDP_HELM_NAMESPACE'] + ':8786'
+            # client = None
+            # while client is None:
+            #     try:
+            #         client = distributed.Client(scheduler, timeout=1)
+            #     except:
+            #         pass
 
             return client, deploy_id
 
