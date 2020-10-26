@@ -273,7 +273,6 @@ class Phase:
                 LOG.info(self._deploy_id)
                 deploy = ska_sdp_config.Deployment(self._deploy_id,
                                                    deploy_type, chart, values)
-
             for txn in self._config.txn():
                 txn.create_deployment(deploy)
 
@@ -290,7 +289,6 @@ class Phase:
                     pass
 
             return client, deploy_id
-
         else:
             # Set state to indicate processing has started
             LOG.info('Setting status to RUNNING')
@@ -298,6 +296,7 @@ class Phase:
                 state = txn.get_processing_block_state(self._pb_id)
                 state['status'] = 'RUNNING'
                 txn.update_processing_block_state(self._pb_id, state)
+            return None
 
     def ee_remove(self, deploy_id=None):
         """Remove EE deployment.
