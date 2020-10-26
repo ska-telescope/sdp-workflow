@@ -248,7 +248,8 @@ class Phase:
             self._event_loop = self._start_event_loop()
             LOG.info("Event loop started")
 
-    def ee_deploy(self, deploy_name=None, image=None, n_workers=1, buffers=[]):
+    def ee_deploy(self, deploy_name=None, deploy_type=None, chart=None, values=None,
+                  image=None, n_workers=1, buffers=[]):
         """Deploy execution engine.
 
         :param deploy_name: processing block ID
@@ -261,21 +262,22 @@ class Phase:
         # Make deployment
         if deploy_name is not None:
             deploy_id = 'proc-{}-{}'.format(self._pb_id, deploy_name)
-            values = {'image': image, 'worker.replicas': n_workers}
-            for i, b in enumerate(buffers):
-                values['buffers[{}]'.format(i)] = b
-            deploy = ska_sdp_config.Deployment(
-                deploy_id, 'helm', {'chart': 'dask', 'values': values}
-            )
+            if image is not None:
+                values = {'image': image, 'worker.replicas': n_workers}
+                for i, b in enumerate(buffers):
+                    values['buffers[{}]'.format(i)] = b
+                deploy = ska_sdp_config.Deployment(
+                    deploy_id, 'helm', {'chart': 'dask', 'values': values}
+                )
+            else:
+                LOG.info(self._deploy_id)
+                deploy = ska_sdp_config.Deployment(self._deploy_id,
+                                                   deploy_type, chart, values)
+
             for txn in self._config.txn():
                 txn.create_deployment(deploy)
 
             self._deploy_id_list.append(deploy_id)
-            # LOG.info(self._deploy_id)
-            # deploy = ska_sdp_config.Deployment(self._deploy_id,
-            #                                    deploy_type, image)
-            # for txn in self._config.txn():
-            #     txn.create_deployment(deploy)
 
             # Wait for scheduler to become available
             scheduler = self._deploy_id + '-scheduler.' + \
@@ -287,7 +289,7 @@ class Phase:
                 except:
                     pass
 
-            return client
+            return client, deploy_id
 
         else:
             # Set state to indicate processing has started
