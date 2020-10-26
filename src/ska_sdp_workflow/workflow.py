@@ -198,7 +198,6 @@ class Phase:
         self._pb_id = pb_id
         self._sbi_id = sbi_id
         self._workflow_type = workflow_type
-        # self._deploy_id = None
         self._deploy_id_list = []
         self._status = None
 
@@ -259,6 +258,13 @@ class Phase:
         :return: deployment ID and Dask client handle
 
         """
+        # Set state to indicate processing has started
+        LOG.info('Setting status to RUNNING')
+        for txn in self._config.txn():
+            state = txn.get_processing_block_state(self._pb_id)
+            state['status'] = 'RUNNING'
+            txn.update_processing_block_state(self._pb_id, state)
+
         # Make deployment
         if deploy_name is not None:
             deploy_id = 'proc-{}-{}'.format(self._pb_id, deploy_name)
@@ -270,8 +276,8 @@ class Phase:
                     deploy_id, 'helm', {'chart': 'dask', 'values': values}
                 )
             else:
-                LOG.info(self._deploy_id)
-                deploy = ska_sdp_config.Deployment(self._deploy_id,
+                LOG.info(deploy_id)
+                deploy = ska_sdp_config.Deployment(deploy_id,
                                                    deploy_type, chart, values)
             for txn in self._config.txn():
                 txn.create_deployment(deploy)
@@ -279,7 +285,7 @@ class Phase:
             self._deploy_id_list.append(deploy_id)
 
             # Wait for scheduler to become available
-            scheduler = self._deploy_id + '-scheduler.' + \
+            scheduler = deploy_id + '-scheduler.' + \
                         os.environ['SDP_HELM_NAMESPACE'] + ':8786'
             client = None
             while client is None:
@@ -289,14 +295,8 @@ class Phase:
                     pass
 
             return client, deploy_id
-        else:
-            # Set state to indicate processing has started
-            LOG.info('Setting status to RUNNING')
-            for txn in self._config.txn():
-                state = txn.get_processing_block_state(self._pb_id)
-                state['status'] = 'RUNNING'
-                txn.update_processing_block_state(self._pb_id, state)
-            return None
+
+        return None
 
     def ee_remove(self, deploy_id=None):
         """Remove EE deployment.
@@ -308,11 +308,6 @@ class Phase:
             for txn in self._config.txn():
                 deploy = txn.get_deployment(deploy_id)
                 txn.delete_deployment(deploy)
-                # self._deploy_id = None
-                # self.update_pb_state()
-        else:
-            LOG.info("EE Removed")
-            # self.update_pb_state()
 
     def is_deploy_finished(self):
         """Waits until all the deployments are finished and removed
@@ -406,15 +401,11 @@ class Phase:
 
         while not q.empty():
             pass
-        # else:
-        #     if q.empty():
+
         LOG.info("Queue is empty now")
         q.join()
         LOG.info("Processing Done")
         self.update_pb_state()
-
-        # for thread in threading.enumerate():
-        #     print(thread.name)
 
     def _start_event_loop(self):
         """Start event loop"""
