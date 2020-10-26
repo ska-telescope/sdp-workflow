@@ -247,7 +247,7 @@ class Phase:
             self._event_loop = self._start_event_loop()
             LOG.info("Event loop started")
 
-    def ee_deploy(self, deploy_name=None, deploy_type=None, chart=None, values=None,
+    def ee_deploy(self, deploy_name=None, deploy_type=None, chart=None,
                   image=None, n_workers=1, buffers=[]):
         """Deploy execution engine.
 
@@ -273,12 +273,12 @@ class Phase:
                 for i, b in enumerate(buffers):
                     values['buffers[{}]'.format(i)] = b
                 deploy = ska_sdp_config.Deployment(
-                    deploy_id, 'helm', {'chart': 'dask', 'values': values}
+                    deploy_id, deploy_type, {'chart': 'dask', 'values': values}
                 )
             else:
                 LOG.info(deploy_id)
                 deploy = ska_sdp_config.Deployment(deploy_id,
-                                                   deploy_type, chart, values)
+                                                   deploy_type, chart)
             for txn in self._config.txn():
                 txn.create_deployment(deploy)
 
