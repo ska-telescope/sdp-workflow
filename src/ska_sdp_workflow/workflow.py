@@ -8,6 +8,8 @@ import threading
 # import ska.logging
 import ska_sdp_config
 import queue
+import os
+import distributed
 
 # ska.logging.configure_logging()
 LOG = logging.getLogger('worklow')
@@ -15,12 +17,10 @@ LOG.setLevel(logging.DEBUG)
 
 
 class ProcessingBlock:
-    """SDP Workflow"""
+    """Connection to SKA SDP Workflow library."""
 
     def __init__(self, pb_id=None):
-        """Initialise.
-
-        Claim processing block.
+        """Connect to config db and claim processing block
 
         :param pb_id: processing block id
         """
@@ -34,7 +34,6 @@ class ProcessingBlock:
             self._pb_id = sys.argv[1]
         else:
             self._pb_id = pb_id
-
         LOG.debug("Processing Block ID %s", self._pb_id)
 
         # Claim processing block
@@ -50,10 +49,10 @@ class ProcessingBlock:
         self._sbi_id = pb.sbi_id
 
     def receive_addresses(self, scan_types):
-        """Generate receive addresses and update it in the processing block state.
+        """Generate receive addresses and update it
+        in the processing block state.
 
         :param scan_types: Scan types
-
         """
 
         # Generate receive addresses
@@ -75,21 +74,21 @@ class ProcessingBlock:
             txn.update_scheduling_block(self._sbi_id, sbi)
 
     def get_parameters(self, schema=None):
-        """Get workflow parameters from processing block as a dict, parsing with schema.
+        """Get workflow parameters from processing block.
 
-        :param pb_id: processing block ID
         :returns: pb_parameters
-
         """
         parameters = self._pb.parameters
         if schema is not None:
             LOG.info("Validate parameters against schema")
 
-        LOG.info(parameters)
         return parameters
 
     def get_scan_types(self):
-        """Get scan types."""
+        """Get scan types from scheduling block.
+
+        :returns: scan_types
+        """
 
         LOG.info('Retrieving channel link map from SBI')
         for txn in self._config.txn():
@@ -99,15 +98,37 @@ class ProcessingBlock:
         return scan_types
 
     def request_buffer(self, size, tags):
+        """Create a :class:`BufferRequest` for input and output buffer.
+
+        :param size: size of the buffer
+        :param tags: type of the buffer
+
+        :returns: handle to the BufferRequest class
+
+        """
 
         return BufferRequest(size, tags)
 
     def create_phase(self, name, reservation):
-        """Create work phase."""
+        """Create a :class:`Phase` for deploying and
+        monitoring execution engines.
+
+        :param name: name of the phase getting created
+        :param reservation: list of buffer reservations
+
+        :returns: handle to the Phase class
+
+        """
         workflow = self._pb.workflow
         workflow_type = workflow['type']
         return Phase(name, reservation, self._config,
                      self._pb_id, self._sbi_id, workflow_type)
+
+    def exit(self):
+        """Close connection to config DB."""
+
+        LOG.info('Closing connection to config DB')
+        self._config.close()
 
     # -------------------------------------
     # Private methods
@@ -147,46 +168,62 @@ class ProcessingBlock:
         return receive_addresses
 
 
+# -------------------------------------
+# BufferRequest Class
+# -------------------------------------
+
+
 class BufferRequest:
+    """Buffer request class. Currently just a placeholder."""
+
     def __init__(self, size, tags):
-        """Init"""
+        """Initialise"""
         LOG.info("Buffer Requested")
 
 
+# -------------------------------------
+# Phase Class
+# -------------------------------------
+
+
 class Phase:
+    """Connection to the Phase class. """
+
     def __init__(self, name, list_reservations, config, pb_id,
                  sbi_id, workflow_type):
-        """Init"""
+        """Initialise"""
         self._name = name
         self._reservations = list_reservations
         self._config = config
         self._pb_id = pb_id
         self._sbi_id = sbi_id
         self._workflow_type = workflow_type
-        self._deploy_id = None
-        # self._deploy_id_list = []
+        # self._deploy_id = None
+        self._deploy_id_list = []
         self._status = None
 
     def __enter__(self):
-        '''Enter'''
+        """Before entering, checks if the pb is cancelled or finished.
+        For real-time workflows checks if sbi is cancelled or finished.
+
+        Waits for resources to be available and then creates an event loop
+        for the batch workflow.
+        """
 
         # Check if the pb is cancelled or sbi is finished or cancelled
         for txn in self._config.txn():
+            pb_state = txn.get_processing_block_state(self._pb_id)
+            pb_status = pb_state.get('status')
+            if pb_status in ['FINISHED', 'CANCELLED']:
+                LOG.info('PB is %s', pb_state)
+                # raise exception
+
             if self._workflow_type == 'realtime':
-                pb_state = txn.get_processing_block_state(self._pb_id)
-                pb_status = pb_state.get('status')
                 sbi = txn.get_scheduling_block(self._sbi_id)
                 sbi_status = sbi.get('status')
-                if pb_status or sbi_status in ['FINISHED', 'CANCELLED']:
+                if sbi_status in ['FINISHED', 'CANCELLED']:
                     # raise exception
-                    LOG.info('PB is %s', pb_status)
                     LOG.info('SBI is %s', sbi_status)
-            else:
-                pb_state = txn.get_processing_block_state(self._pb_id)
-                pb_status = pb_state.get('status')
-                if pb_status in ['FINISHED', 'CANCELLED']:
-                    LOG.info('PB is %s', pb_state)
-                    # raise exception
 
         # Set state to indicate workflow is waiting for resources
         LOG.info('Setting status to WAITING')
@@ -211,50 +248,46 @@ class Phase:
             self._event_loop = self._start_event_loop()
             LOG.info("Event loop started")
 
-    def _start_event_loop(self):
-        """Start event loop"""
-        thread = threading.Thread(
-            target=self._set_status, name='EventLoop', daemon=True
-        )
-        thread.start()
-
-    def _set_status(self):
-        """watch for changes to configuration and loop"""
-
-        for txn in self._config.txn():
-            LOG.info("Check for changes in the config db")
-            state = txn.get_processing_block_state(self._pb_id)
-            pb_status = state.get('status')
-            if pb_status in ['FINISHED', 'CANCELLED']:
-                # if cancelled raise exception
-                LOG.info('Inside event loop PB_STATUS is %s', pb_status)
-                break
-            else:
-                LOG.info("Waiting for pb to change")
-
-            if not txn.is_processing_block_owner(self._pb_id):
-                LOG.info('Lost ownership of the processing block')
-                # raise exception
-                break
-
-            txn.loop(wait=True)
-
-    def ee_deploy(self, deploy_name=None, deploy_type=None, image=None):
-        """Deploy Dask execution engine.
+    def ee_deploy(self, deploy_name=None, image=None, n_workers=1, buffers=[]):
+        """Deploy execution engine.
 
         :param deploy_name: processing block ID
-        :param deploy_type: Deploy type
         :param image: Docker image to deploy
+        :param n_workers: number of Dask workers
+        :param buffers: list of buffers to mount on Dask workers
+        :return: deployment ID and Dask client handle
 
         """
         # Make deployment
         if deploy_name is not None:
-            self._deploy_id = 'proc-{}-{}'.format(self._pb_id, deploy_name)
-            LOG.info(self._deploy_id)
-            deploy = ska_sdp_config.Deployment(self._deploy_id,
-                                               deploy_type, image)
+            deploy_id = 'proc-{}-{}'.format(self._pb_id, deploy_name)
+            values = {'image': image, 'worker.replicas': n_workers}
+            for i, b in enumerate(buffers):
+                values['buffers[{}]'.format(i)] = b
+            deploy = ska_sdp_config.Deployment(
+                deploy_id, 'helm', {'chart': 'dask', 'values': values}
+            )
             for txn in self._config.txn():
                 txn.create_deployment(deploy)
+
+            self._deploy_id_list.append(deploy_id)
+            # LOG.info(self._deploy_id)
+            # deploy = ska_sdp_config.Deployment(self._deploy_id,
+            #                                    deploy_type, image)
+            # for txn in self._config.txn():
+            #     txn.create_deployment(deploy)
+
+            # Wait for scheduler to become available
+            scheduler = self._deploy_id + '-scheduler.' + \
+                        os.environ['SDP_HELM_NAMESPACE'] + ':8786'
+            client = None
+            while client is None:
+                try:
+                    client = distributed.Client(scheduler, timeout=1)
+                except:
+                    pass
+
+            return client
 
         else:
             # Set state to indicate processing has started
@@ -274,21 +307,31 @@ class Phase:
             for txn in self._config.txn():
                 deploy = txn.get_deployment(deploy_id)
                 txn.delete_deployment(deploy)
-                self._deploy_id = None
-                self.update_pb_state()
+                # self._deploy_id = None
+                # self.update_pb_state()
         else:
-            self.update_pb_state()
+            LOG.info("EE Removed")
+            # self.update_pb_state()
 
     def is_deploy_finished(self):
+        """Waits until all the deployments are finished and removed
+         from the list."""
+        # TODO - NEED TO UPDATE THIS
         for txn in self._config.txn():
             list_deployments = txn.list_deployments()
-            if self._deploy_id is not None:
-                if self._deploy_id not in list_deployments:
-                    LOG.info("Deployment Finished")
+            if self._deploy_id_list:
+                for deploy_id in self._deploy_id_list:
+                    if deploy_id not in list_deployments:
+                        LOG.info("Deployment Finished")
+                        self._deploy_id_list.remove(deploy_id)
+            else:
+                LOG.info("Deployments all removed")
+                break
+
             txn.loop(wait=True)
 
-
     def is_sbi_finished(self, txn):
+        """Checks if the sbi are finished or cancelled."""
         sbi = txn.get_scheduling_block(self._sbi_id)
         status = sbi.get('status')
         if status in ['FINISHED', 'CANCELLED']:
@@ -303,7 +346,10 @@ class Phase:
         return finished
 
     def update_pb_state(self, status=None):
-        """Update Processing Block State."""
+        """Update Processing Block State.
+
+        :param status: Default status is set to finished unless provided
+        """
 
         for txn in self._config.txn():
             # Set state to indicate processing has ended
@@ -317,9 +363,9 @@ class Phase:
             txn.update_processing_block_state(self._pb_id, state)
 
     def wait_loop(self):
-        """Wait loop.
-
-        :returns: config transaction"""
+        """Wait loop to check if pb abd sbi is set to finished or cancelled
+        and also to check if pb lost ownership.
+        """
 
         for txn in self._config.txn():
 
@@ -327,7 +373,7 @@ class Phase:
             pb_state = txn.get_processing_block_state(self._pb_id)
             pb_status = pb_state.get('status')
             if pb_status in ['FINISHED', 'CANCELLED']:
-                LOG.info("Processing Block Finished")
+                LOG.info("Processing Block is %s", pb_status)
                 # if cancelled raise exception
                 break
 
@@ -342,11 +388,13 @@ class Phase:
             txn.loop(wait=True)
 
     def process_to_do(self, processes):
+        """Spawn a thread and pass the processes to queue."""
+        # TODO - Need to do a thorough check-up
 
         # spawn a pool of thread, and pass them queue instance
         q = queue.Queue()
 
-        t = ThreadUrl(q)
+        t = ProcessingThread(q)
         t.setDaemon(True)
         t.start()
 
@@ -365,39 +413,78 @@ class Phase:
         # for thread in threading.enumerate():
         #     print(thread.name)
 
+    def _start_event_loop(self):
+        """Start event loop"""
+        thread = threading.Thread(
+            target=self._set_status, name='EventLoop', daemon=True
+        )
+        thread.start()
+
+    def _set_status(self):
+        """Watch for changes in the config db"""
+
+        for txn in self._config.txn():
+
+            state = txn.get_processing_block_state(self._pb_id)
+            pb_status = state.get('status')
+            if pb_status in ['FINISHED', 'CANCELLED']:
+                # if cancelled raise exception
+                break
+
+            if not txn.is_processing_block_owner(self._pb_id):
+                LOG.info('Lost ownership of the processing block')
+                # raise exception
+                break
+
+            txn.loop(wait=True)
+
     def __exit__(self, exc_type, exc_val, exc_tb):
-        """Exit"""
+        """Before exiting the phase class, checks if the sbi is marked as
+        finished or cancelled for real-time workflows and updates processing
+        block state.
+
+        For batch-workflow waits until all the deployments are finished and
+        processing block is set to finished."""
 
         LOG.info("Going to exit now")
         # Wait until SBI is marked as FINISHED or CANCELLED
         if self._workflow_type == 'realtime':
             self.wait_loop()
 
-            # Update Processing Block
-            self.update_pb_state(self._status)
-        # else:
-        #     self.is_deploy_finished()
+            # Clean up deployment.
+            LOG.info("Clean up deployment")
+            if self._deploy_id_list:
+                for deploy_id in self._deploy_id_list:
+                    self.ee_remove(deploy_id)
 
-        # Clean up deployment.
-        if self._deploy_id is not None:
-            self.ee_remove(self._deploy_id)
+                if self.is_deploy_finished():
+                    # Update Processing Block
+                    self.update_pb_state(self._status)
 
-        # # Close connection to config DB
-        # LOG.info('Closing connection to config DB')
-        # self._config.close()
+            else:
+                # Update Processing Block
+                self.update_pb_state(self._status)
 
+        else:
+            if self.is_deploy_finished():
+                # Update Processing Block
+                self.update_pb_state(self._status)
 
+# -------------------------------------
+# Processing Thread Class
+# -------------------------------------
 
-class ThreadUrl(threading.Thread):
-  """Threaded Url Grab"""
-  def __init__(self, queue):
-    threading.Thread.__init__(self)
-    self.queue = queue
+class ProcessingThread(threading.Thread):
+    """Add process to the queue and execute sequentially."""
 
-  def run(self):
-    while True:
-        task = self.queue.get()
-        func = task[0]
-        args = task[1:]
-        func(*args)
-        self.queue.task_done()
+    def __init__(self, queue):
+        threading.Thread.__init__(self)
+        self.queue = queue
+
+    def run_worker(self):
+        while True:
+            task = self.queue.get()
+            func = task[0]
+            args = task[1:]
+            func(*args)
+            self.queue.task_done()
