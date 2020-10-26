@@ -399,6 +399,8 @@ class Phase:
         t.setDaemon(True)
         t.start()
 
+        LOG.info("Inisde the function to spawn the thread")
+
         for process in processes:
             q.put(process)
 
@@ -483,7 +485,7 @@ class ProcessingThread(threading.Thread):
         threading.Thread.__init__(self)
         self.queue = queue
 
-    def run_worker(self):
+    def run(self):
         while True:
             task = self.queue.get()
             func = task[0]
