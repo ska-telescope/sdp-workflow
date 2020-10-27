@@ -12,7 +12,7 @@ import os
 import distributed
 
 # ska.logging.configure_logging()
-LOG = logging.getLogger('worklow')
+LOG = logging.getLogger('ska_sdp_worklow')
 LOG.setLevel(logging.DEBUG)
 
 
@@ -214,14 +214,12 @@ class Phase:
             pb_state = txn.get_processing_block_state(self._pb_id)
             pb_status = pb_state.get('status')
             if pb_status in ['FINISHED', 'CANCELLED']:
-                LOG.error('PB is %s', pb_state)
                 raise Exception('PB is {}'.format(pb_state))
 
             if self._workflow_type == 'realtime':
                 sbi = txn.get_scheduling_block(self._sbi_id)
                 sbi_status = sbi.get('status')
                 if sbi_status in ['FINISHED', 'CANCELLED']:
-                    LOG.error('PB is %s', sbi_status)
                     raise Exception('PB is {}'.format(sbi_status))
 
         # Set state to indicate workflow is waiting for resources
@@ -229,7 +227,6 @@ class Phase:
         for txn in self._config.txn():
             state = txn.get_processing_block_state(self._pb_id)
             state['status'] = 'WAITING'
-            raise Exception('PB is {}'.format(state['status']))
             txn.update_processing_block_state(self._pb_id, state)
 
         # Wait for resources_available to be true
@@ -296,10 +293,7 @@ class Phase:
                 except Exception as e:
                     print(e)
             if client is None:
-                LOG.error("Could not connect to Dask!")
-                # sys.exit(1)
-                # raise exception
-                return client, deploy_id
+                raise Exception("Could not connect to Dask!")
             LOG.info("Connected to Dask")
 
             return client, deploy_id
@@ -322,13 +316,11 @@ class Phase:
          from the list."""
         for txn in self._config.txn():
             list_deployments = txn.list_deployments()
-            if self._deploy_id_list:
-                for deploy_id in self._deploy_id_list:
-                    if deploy_id not in list_deployments:
-                        LOG.info("Deployment Finished")
-                        self._deploy_id_list.remove(deploy_id)
+            for deploy_id in self._deploy_id_list:
+                if deploy_id not in list_deployments:
+                    self._deploy_id_list.remove(deploy_id)
             else:
-                LOG.info("Deployments all removed")
+                LOG.info("Deployment Finished")
                 break
 
             txn.loop(wait=True)
@@ -338,17 +330,17 @@ class Phase:
         sbi = txn.get_scheduling_block(self._sbi_id)
         status = sbi.get('status')
         if status in ['FINISHED', 'CANCELLED']:
+            if status is 'CANCELLED':
+                raise Exception('SBI is {}'.format(status))
             LOG.info('SBI is %s', status)
             self._status = status
-            # if cancelled raise exception
             finished = True
-
         else:
             finished = False
 
         return finished
 
-    def update_pb_state(self, status=None):
+    def update_pb_state(self, ):
         """Update Processing Block State.
 
         :param status: Default status is set to finished unless provided
@@ -357,7 +349,7 @@ class Phase:
         for txn in self._config.txn():
             # Set state to indicate processing has ended
             state = txn.get_processing_block_state(self._pb_id)
-            if status is None:
+            if self._status is None:
                 LOG.info('Setting status to FINISHED')
                 state['status'] = 'FINISHED'
             else:
@@ -377,13 +369,12 @@ class Phase:
             pb_status = pb_state.get('status')
             if pb_status in ['FINISHED', 'CANCELLED']:
                 LOG.info("Processing Block is %s", pb_status)
-                # if cancelled raise exception
+                if pb_status is 'CANCELLED':
+                    raise Exception('PB is {}'.format(pb_status))
                 break
 
             if not txn.is_processing_block_owner(self._pb_id):
-                LOG.info('Lost ownership of the processing block')
-                # raise exception
-                break
+                raise Exception("Lost ownership of the processing block")
 
             if self.is_sbi_finished(txn):
                 break
@@ -427,13 +418,12 @@ class Phase:
             state = txn.get_processing_block_state(self._pb_id)
             pb_status = state.get('status')
             if pb_status in ['FINISHED', 'CANCELLED']:
-                # if cancelled raise exception
+                if pb_status is 'CANCELLED':
+                    raise Exception('PB is {}'.format(pb_status))
                 break
 
             if not txn.is_processing_block_owner(self._pb_id):
-                LOG.info('Lost ownership of the processing block')
-                # raise exception
-                break
+                raise Exception("Lost ownership of the processing block")
 
             txn.loop(wait=True)
 
@@ -445,9 +435,8 @@ class Phase:
         For batch-workflow waits until all the deployments are finished and
         processing block is set to finished."""
 
-        LOG.info("Going to exit now")
-        # Wait until SBI is marked as FINISHED or CANCELLED
         if self._workflow_type == 'realtime':
+            # Wait until SBI is marked as FINISHED or CANCELLED
             self.wait_loop()
 
             # Clean up deployment.
@@ -455,19 +444,13 @@ class Phase:
             if self._deploy_id_list:
                 for deploy_id in self._deploy_id_list:
                     self.ee_remove(deploy_id)
-
                 if self.is_deploy_finished():
-                    # Update Processing Block
-                    self.update_pb_state(self._status)
-
+                    self.update_pb_state()
             else:
-                # Update Processing Block
-                self.update_pb_state(self._status)
-
+                self.update_pb_state()
         else:
             if self.is_deploy_finished():
-                # Update Processing Block
-                self.update_pb_state(self._status)
+                self.update_pb_state()
 
 # -------------------------------------
 # Processing Thread Class
