@@ -214,21 +214,22 @@ class Phase:
             pb_state = txn.get_processing_block_state(self._pb_id)
             pb_status = pb_state.get('status')
             if pb_status in ['FINISHED', 'CANCELLED']:
-                LOG.info('PB is %s', pb_state)
-                # raise exception
+                LOG.error('PB is %s', pb_state)
+                raise Exception('PB is {}'.format(pb_state))
 
             if self._workflow_type == 'realtime':
                 sbi = txn.get_scheduling_block(self._sbi_id)
                 sbi_status = sbi.get('status')
                 if sbi_status in ['FINISHED', 'CANCELLED']:
-                    # raise exception
-                    LOG.info('SBI is %s', sbi_status)
+                    LOG.error('PB is %s', sbi_status)
+                    raise Exception('PB is {}'.format(sbi_status))
 
         # Set state to indicate workflow is waiting for resources
         LOG.info('Setting status to WAITING')
         for txn in self._config.txn():
             state = txn.get_processing_block_state(self._pb_id)
             state['status'] = 'WAITING'
+            raise Exception('PB is {}'.format(state['status']))
             txn.update_processing_block_state(self._pb_id, state)
 
         # Wait for resources_available to be true
@@ -283,8 +284,6 @@ class Phase:
             for txn in self._config.txn():
                 txn.create_deployment(deploy)
 
-            LOG.info(self._deploy_id_list)
-
             self._deploy_id_list.append(deploy_id)
 
             LOG.info("Waiting for Scheduler to become available...")
@@ -302,16 +301,6 @@ class Phase:
                 # raise exception
                 return client, deploy_id
             LOG.info("Connected to Dask")
-
-            # # Wait for scheduler to become available
-            # scheduler = deploy_id + '-scheduler.' + \
-            #             os.environ['SDP_HELM_NAMESPACE'] + ':8786'
-            # client = None
-            # while client is None:
-            #     try:
-            #         client = distributed.Client(scheduler, timeout=1)
-            #     except:
-            #         pass
 
             return client, deploy_id
 
@@ -331,7 +320,6 @@ class Phase:
     def is_deploy_finished(self):
         """Waits until all the deployments are finished and removed
          from the list."""
-        # TODO - NEED TO UPDATE THIS
         for txn in self._config.txn():
             list_deployments = txn.list_deployments()
             if self._deploy_id_list:
@@ -402,7 +390,7 @@ class Phase:
 
             txn.loop(wait=True)
 
-    def process_to_do(self, processes):
+    def process_task(self, processes):
         """Spawn a thread and pass the processes to queue."""
         # TODO - Need to do a thorough check-up
 
@@ -412,8 +400,6 @@ class Phase:
         t = ProcessingThread(q)
         t.setDaemon(True)
         t.start()
-
-        LOG.info("Inisde the function to spawn the thread")
 
         for process in processes:
             q.put(process)
