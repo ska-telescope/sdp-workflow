@@ -417,8 +417,8 @@ class Phase:
 
             state = txn.get_processing_block_state(self._pb_id)
             pb_status = state.get('status')
+            LOG.info("PB Status %s", pb_status)
             if pb_status in ['FINISHED', 'CANCELLED']:
-                LOG.info("PB Status %s", pb_status)
                 if pb_status is 'CANCELLED':
                     raise Exception('PB is {}'.format(pb_status))
                 break
