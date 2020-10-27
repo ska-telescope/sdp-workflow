@@ -291,7 +291,7 @@ class Phase:
 
 
             self._deploy_id_list.append(deploy_id)
-            
+
             if self._workflow_type == 'batch':
                 LOG.info("Waiting for Scheduler to become available...")
                 client = None
