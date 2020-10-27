@@ -289,22 +289,24 @@ class Phase:
             for txn in self._config.txn():
                 txn.create_deployment(deploy)
 
+
             self._deploy_id_list.append(deploy_id)
+            
+            if self._workflow_type == 'batch':
+                LOG.info("Waiting for Scheduler to become available...")
+                client = None
+                for _ in range(200):
+                    try:
+                        client = distributed.Client(
+                            deploy_id + '-scheduler.' +
+                            os.environ['SDP_HELM_NAMESPACE'] + ':8786')
+                    except Exception as e:
+                        print(e)
+                if client is None:
+                    raise Exception("Could not connect to Dask!")
+                LOG.info("Connected to Dask")
 
-            LOG.info("Waiting for Scheduler to become available...")
-            client = None
-            for _ in range(200):
-                try:
-                    client = distributed.Client(
-                        deploy_id + '-scheduler.' +
-                        os.environ['SDP_HELM_NAMESPACE'] + ':8786')
-                except Exception as e:
-                    print(e)
-            if client is None:
-                raise Exception("Could not connect to Dask!")
-            LOG.info("Connected to Dask")
-
-            return client, deploy_id
+                return client, deploy_id
 
         return None
 
