@@ -245,6 +245,12 @@ class Phase:
             self._event_loop = self._start_event_loop()
             LOG.info("Event loop started")
 
+            # spawn a pool of thread, and pass them queue instance
+            self._q = queue.Queue()
+            t = ProcessingThread(self._q)
+            t.setDaemon(True)
+            t.start()
+
     def ee_deploy(self, deploy_name=None, deploy_type=None, chart=None,
                   image=None, n_workers=1, buffers=[]):
         """Deploy execution engine.
@@ -385,21 +391,14 @@ class Phase:
         """Spawn a thread and pass the processes to queue."""
         # TODO - Need to do a thorough check-up
 
-        # spawn a pool of thread, and pass them queue instance
-        q = queue.Queue()
-
-        t = ProcessingThread(q)
-        t.setDaemon(True)
-        t.start()
-
         for process in processes:
-            q.put(process)
+            self._q.put(process)
 
-        while not q.empty():
+        while not self._q.empty():
             pass
 
         LOG.info("Queue is empty now")
-        q.join()
+        self._q.join()
         LOG.info("Processing Done")
         self.update_pb_state()
 
@@ -419,13 +418,15 @@ class Phase:
             LOG.info("PB Status %s", pb_status)
             if pb_status in ['FINISHED', 'CANCELLED']:
                 if pb_status is 'CANCELLED':
+                    self._q.queue.clear()
                     raise Exception('PB is {}'.format(pb_status))
                 break
             else:
                 LOG.info("Checking Config db for changes...")
 
             if not txn.is_processing_block_owner(self._pb_id):
-                LOG.error("Lost ownership of the processing block")
+                LOG.info("Lost ownership of the processing block")
+                self._q.queue.clear()
                 raise Exception("Lost ownership of the processing block")
 
             txn.loop(wait=True)
