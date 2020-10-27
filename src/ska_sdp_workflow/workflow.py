@@ -200,6 +200,7 @@ class Phase:
         self._workflow_type = workflow_type
         self._deploy_id_list = []
         self._status = None
+        self._q = None
 
     def __enter__(self):
         """Before entering, checks if the pb is cancelled or finished.
@@ -389,7 +390,6 @@ class Phase:
 
     def process_task(self, processes):
         """Spawn a thread and pass the processes to queue."""
-        # TODO - Need to do a thorough check-up
 
         for process in processes:
             self._q.put(process)
