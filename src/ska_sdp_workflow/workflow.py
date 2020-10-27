@@ -12,7 +12,7 @@ import os
 import distributed
 
 # ska.logging.configure_logging()
-LOG = logging.getLogger('ska_sdp_worklow')
+LOG = logging.getLogger('workflow')
 LOG.setLevel(logging.DEBUG)
 
 
@@ -350,10 +350,10 @@ class Phase:
             # Set state to indicate processing has ended
             state = txn.get_processing_block_state(self._pb_id)
             if self._status is None:
-                LOG.info('Setting status to FINISHED')
+                LOG.info('Setting PB status to FINISHED')
                 state['status'] = 'FINISHED'
             else:
-                LOG.info('Setting status to %s', self._status)
+                LOG.info('Setting PB status to %s', self._status)
                 state['status'] = self._status
             txn.update_processing_block_state(self._pb_id, state)
 
@@ -406,11 +406,11 @@ class Phase:
     def _start_event_loop(self):
         """Start event loop"""
         thread = threading.Thread(
-            target=self._set_status, name='EventLoop', daemon=True
+            target=self._check_status, name='EventLoop', daemon=True
         )
         thread.start()
 
-    def _set_status(self):
+    def _check_status(self):
         """Watch for changes in the config db"""
 
         for txn in self._config.txn():
@@ -418,9 +418,12 @@ class Phase:
             state = txn.get_processing_block_state(self._pb_id)
             pb_status = state.get('status')
             if pb_status in ['FINISHED', 'CANCELLED']:
+                LOG.info("PB Status %s", pb_status)
                 if pb_status is 'CANCELLED':
                     raise Exception('PB is {}'.format(pb_status))
                 break
+            else:
+                LOG.info("Checking Config db for changes...")
 
             if not txn.is_processing_block_owner(self._pb_id):
                 raise Exception("Lost ownership of the processing block")
