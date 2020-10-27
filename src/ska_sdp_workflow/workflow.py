@@ -252,6 +252,7 @@ class Phase:
             t.setDaemon(True)
             t.start()
 
+
     def ee_deploy(self, deploy_name=None, deploy_type=None, chart=None,
                   image=None, n_workers=1, buffers=[]):
         """Deploy execution engine.
@@ -347,11 +348,13 @@ class Phase:
 
         return finished
 
-    def update_pb_state(self, ):
+    def update_pb_state(self, status=None):
         """Update Processing Block State.
 
         :param status: Default status is set to finished unless provided
         """
+        if status is not None:
+            self._status = status
 
         for txn in self._config.txn():
             # Set state to indicate processing has ended
@@ -397,7 +400,7 @@ class Phase:
         while not self._q.empty():
             pass
 
-        LOG.info("Queue is empty now")
+        LOG.info("Queue is empty")
         self._q.join()
         LOG.info("Processing Done")
         self.update_pb_state()
@@ -425,9 +428,9 @@ class Phase:
                 LOG.info("Checking Config db for changes...")
 
             if not txn.is_processing_block_owner(self._pb_id):
-                LOG.info("Lost ownership of the processing block")
+                LOG.error("Lost ownership of the processing block")
                 self._q.queue.clear()
-                raise Exception("Lost ownership of the processing block")
+                # raise Exception("Lost ownership of the processing block")
 
             txn.loop(wait=True)
 
