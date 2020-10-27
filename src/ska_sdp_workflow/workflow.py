@@ -414,7 +414,6 @@ class Phase:
         """Watch for changes in the config db"""
 
         for txn in self._config.txn():
-
             state = txn.get_processing_block_state(self._pb_id)
             pb_status = state.get('status')
             LOG.info("PB Status %s", pb_status)
@@ -426,6 +425,7 @@ class Phase:
                 LOG.info("Checking Config db for changes...")
 
             if not txn.is_processing_block_owner(self._pb_id):
+                LOG.error("Lost ownership of the processing block")
                 raise Exception("Lost ownership of the processing block")
 
             txn.loop(wait=True)
