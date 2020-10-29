@@ -265,7 +265,6 @@ class Phase:
         deploy_id = self._deploy.get_id()
         LOG.info("Deploy ID {}".format(deploy_id))
         self._deploy_id_list.append(deploy_id)
-        LOG.info("Deployment ID List - ", self._deploy_id_list)
 
     def ee_deploy_dask(self, execute_func, args):
         """Deploy Dask and return a handle."""
@@ -466,7 +465,10 @@ class Deployment:
         """Get deployment id"""
         return self._deploy_id
 
-    def remove(self):
+    def remove(self, deploy_id=None):
+        """Remove EE Deploy."""
+        if deploy_id is not None:
+            self._deploy_id = deploy_id
         for txn in self._config.txn():
             deploy = txn.get_deployment(self._deploy_id)
             txn.delete_deployment(deploy)
