@@ -423,6 +423,7 @@ class Deployment:
     def __init__(self, pb_id, config, execute_func, args):
         self._pb_id = pb_id
         self._config = config
+        self._deploy_id = None
 
         x = threading.Thread(target=self._deploy_dask, args=(execute_func, args))
         x.setDaemon(True)
@@ -439,9 +440,9 @@ class Deployment:
         # need to communicate with a scheduler process. But we are ignoring
         # all of that at the moment.
         LOG.info("Deploying Dask...")
-        deploy_id = 'proc-{}-dask'.format(self._pb_id)
+        self._deploy_id = 'proc-{}-dask'.format(self._pb_id)
         deploy = ska_sdp_config.Deployment(
-            deploy_id, "helm", {
+            self._deploy_id, "helm", {
                 'chart': 'dask/dask',
                 'values': {
                     'jupyter.enabled': 'false',
@@ -464,7 +465,7 @@ class Deployment:
         for _ in range(200):
             try:
                 client = distributed.Client(
-                    deploy_id + '-scheduler.' +
+                    self._deploy_id + '-scheduler.' +
                     os.environ['SDP_HELM_NAMESPACE'] + ':8786')
             except Exception as e:
                 print(e)
@@ -478,7 +479,9 @@ class Deployment:
 
     def is_finished(self):
         if self._x.is_alive():
-            print("Waiting...")
             return False
         else:
+            for txn in self._config.txn():
+                deploy = txn.get_deployment(self._deploy_id)
+                txn.delete_deployment(deploy)
             return True
