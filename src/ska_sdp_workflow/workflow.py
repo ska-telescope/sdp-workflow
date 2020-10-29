@@ -198,6 +198,7 @@ class Phase:
         self._sbi_id = sbi_id
         self._workflow_type = workflow_type
         self._deploy_id_list = []
+        self._deploy = None
         self._status = None
         self._q = None
 
@@ -245,12 +246,6 @@ class Phase:
             state['status'] = 'RUNNING'
             txn.update_processing_block_state(self._pb_id, state)
 
-            # # spawn a pool of thread, and pass them queue instance
-            # self._q = queue.Queue()
-            # t = ProcessingThread(self._q)
-            # t.setDaemon(True)
-            # t.start()
-
     def check_state(self, txn):
         """Check if the pb is cancelled or sbi is finished or cancelled"""
         LOG.info("Checking PB and SBI states")
@@ -265,28 +260,16 @@ class Phase:
             if sbi_status in ['FINISHED', 'CANCELLED']:
                 raise Exception('PB is {}'.format(sbi_status))
 
+    def ee_deploy(self, deploy_name):
+        self._deploy = Deployment(self._pb_id, self._config, deploy_name)
+        deploy_id = self._deploy.get_id()
+        LOG.info("Deploy ID {}".format(deploy_id))
+        self._deploy_id_list.append(deploy_id)
+
     def ee_deploy_dask(self, execute_func, args):
-        """."""
+        """Deploy Dask and return a handle."""
+        return Deployment(self._pb_id, self._config, 'dask', execute_func, args)
 
-        return Deployment(self._pb_id, self._config, execute_func, args)
-        # workflow = self._pb.workflow
-        # workflow_type = workflow['type']
-        # return Phase(name, reservation, self._config,
-        #              self._pb_id, self._sbi_id, workflow_type)
-
-    def is_deploy_finished(self):
-        """Waits until all the deployments are finished and removed
-         from the list."""
-        for txn in self._config.txn():
-            list_deployments = txn.list_deployments()
-            for deploy_id in self._deploy_id_list:
-                if deploy_id not in list_deployments:
-                    self._deploy_id_list.remove(deploy_id)
-            else:
-                LOG.info("Deployment Finished")
-                break
-
-            txn.loop(wait=True)
 
     def is_sbi_finished(self, txn):
         """Checks if the sbi are finished or cancelled."""
@@ -347,20 +330,6 @@ class Phase:
 
             txn.loop(wait=True)
 
-    # def process_task(self, processes):
-    #     """Spawn a thread and pass the processes to queue."""
-    #
-    #     for process in processes:
-    #         self._q.put(process)
-    #
-    #     while not self._q.empty():
-    #         pass
-    #
-    #     LOG.info("Queue is empty")
-    #     self._q.join()
-    #     LOG.info("Processing Done")
-    #     self.update_pb_state()
-
     def _start_event_loop(self):
         """Start event loop"""
         thread = threading.Thread(
@@ -381,12 +350,10 @@ class Phase:
                     raise Exception('PB is {}'.format(pb_status))
                 break
             else:
-                LOG.info("Checking Config db for changes...")
+                LOG.info("Watching Config DB for changes...")
 
             if not txn.is_processing_block_owner(self._pb_id):
-                LOG.error("Lost ownership of the processing block")
-                self._q.queue.clear()
-                # raise Exception("Lost ownership of the processing block")
+                raise Exception("Lost ownership of the processing block")
 
             txn.loop(wait=True)
 
@@ -406,13 +373,12 @@ class Phase:
             LOG.info("Clean up deployment")
             if self._deploy_id_list:
                 for deploy_id in self._deploy_id_list:
-                    self.ee_remove(deploy_id)
-                if self.is_deploy_finished():
-                    self.update_pb_state()
+                    self._deploy.remove(deploy_id)
+                self.update_pb_state()
             else:
+                # This is for test_realtime workflow
                 self.update_pb_state()
         else:
-            # if self.is_deploy_finished():
             self.update_pb_state()
 
 # -------------------------------------
@@ -420,15 +386,32 @@ class Phase:
 # -------------------------------------
 
 class Deployment:
-    def __init__(self, pb_id, config, execute_func, args):
+    def __init__(self, pb_id, config, deploy_name=None,
+                 execute_func=None, args=None):
         self._pb_id = pb_id
         self._config = config
         self._deploy_id = None
+        self._deploy_flag = False
 
-        x = threading.Thread(target=self._deploy_dask, args=(execute_func, args))
-        x.setDaemon(True)
-        x.start()
-        self._x = x
+        if deploy_name == 'dask':
+            x = threading.Thread(target=self._deploy_dask, args=(execute_func, args))
+            x.setDaemon(True)
+            x.start()
+        else:
+            self._ee_deploy(deploy_name)
+
+    def _ee_deploy(self, deploy_name):
+        """Deploy Execution Engines."""
+        LOG.info("Deploying {} Workflow...".format(deploy_name))
+        chart = {
+            'chart': deploy_name,  # Helm chart deploy from the repo
+        }
+        deploy_id = 'proc-{}-{}'.format(self._pb_id, deploy_name)
+        LOG.info(deploy_id)
+        deploy = ska_sdp_config.Deployment(deploy_id,
+                                           "hel,", chart)
+        for txn in self._config.txn():
+            txn.create_deployment(deploy)
 
     def _deploy_dask(self, func, args):
         # Deploy Dask with 2 workers.
@@ -477,11 +460,18 @@ class Deployment:
         # Doing some silly calculation
         func(*args)
 
+        self._deploy_flag = True
+
+    def get_id(self):
+        """Get deployment id"""
+        return self._deploy_id
+
+    def remove(self):
+        for txn in self._config.txn():
+            deploy = txn.get_deployment(self._deploy_id)
+            txn.delete_deployment(deploy)
+
     def is_finished(self):
-        if self._x.is_alive():
-            return False
-        else:
-            for txn in self._config.txn():
-                deploy = txn.get_deployment(self._deploy_id)
-                txn.delete_deployment(deploy)
+        if self._deploy_flag:
+            self.remove()
             return True
