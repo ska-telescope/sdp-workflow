@@ -185,7 +185,6 @@ class BufferRequest:
 # Phase Class
 # -------------------------------------
 
-
 class Phase:
     """Connection to the Phase class. """
 
@@ -266,10 +265,10 @@ class Phase:
             if sbi_status in ['FINISHED', 'CANCELLED']:
                 raise Exception('PB is {}'.format(sbi_status))
 
-    def ee_deploy_dask(self, execute_func):
+    def ee_deploy_dask(self, execute_func, args):
         """."""
 
-        return Deployment(self._pb_id, self._config, execute_func)
+        return Deployment(self._pb_id, execute_func, args)
         # workflow = self._pb.workflow
         # workflow_type = workflow['type']
         # return Phase(name, reservation, self._config,
@@ -413,29 +412,24 @@ class Phase:
             else:
                 self.update_pb_state()
         else:
-            if self.is_deploy_finished():
-                self.update_pb_state()
+            # if self.is_deploy_finished():
+            self.update_pb_state()
 
 # -------------------------------------
 # Deployment Class
 # -------------------------------------
 
 class Deployment:
-    def __init__(self, pb_id, config, execute_func):
+    def __init__(self, pb_id, execute_func, args):
         self._pb_id = pb_id
-        self._config = config
+        # self._config = config
 
-        # TODO NEED TO SPAWN THIS INTO A SEPERATE THREAD
+        x = threading.Thread(target=self._deploy_dask, args=(execute_func, args))
+        x.setDaemon(True)
+        x.start()
+        self._x = x
 
-        """Deploy execution engine.
-
-        :param deploy_name: processing block ID
-        :param image: Docker image to deploy
-        :param n_workers: number of Dask workers
-        :param buffers: list of buffers to mount on Dask workers
-        :return: deployment ID and Dask client handle
-
-        """
+    def _deploy_dask(self, func, args):
         # Deploy Dask with 2 workers.
         # This is done by adding the request to the configuration database,
         # where it will be picked up and executed by appropriate
@@ -467,7 +461,6 @@ class Deployment:
         LOG.info("Waiting for Dask...")
         client = None
 
-        # This needs to be done in a seperate thread
         for _ in range(200):
             try:
                 client = distributed.Client(
@@ -480,56 +473,12 @@ class Deployment:
             sys.exit(1)
         LOG.info("Connected to Dask")
 
+        # Doing some silly calculation
+        func(*args)
+
     def is_finished(self):
-        pass
-
-        # # Make deployment
-        # if deploy_name is not None:
-        #     deploy_id = 'proc-{}-{}'.format(self._pb_id, deploy_name)
-        #     if image is not None:
-        #         values = {'image': image, 'worker.replicas': n_workers}
-        #         for i, b in enumerate(buffers):
-        #             values['buffers[{}]'.format(i)] = b
-        #         deploy = ska_sdp_config.Deployment(
-        #             deploy_id, deploy_type, {'chart': 'dask', 'values': values}
-        #         )
-        #     else:
-        #         LOG.info(deploy_id)
-        #         deploy = ska_sdp_config.Deployment(deploy_id,
-        #                                            deploy_type, chart)
-        #     LOG.info(deploy)
-        #     for txn in self._config.txn():
-        #         txn.create_deployment(deploy)
-        #
-        #     self._deploy_id_list.append(deploy_id)
-        #
-        #     if self._workflow_type == 'batch':
-        #         LOG.info("Waiting for Scheduler to become available...")
-        #         client = None
-        #         for _ in range(200):
-        #             try:
-        #                 client = distributed.Client(
-        #                     deploy_id + '-scheduler.' +
-        #                     os.environ['SDP_HELM_NAMESPACE'] + ':8786')
-        #             except Exception as e:
-        #                 print(e)
-        #         if client is None:
-        #             raise Exception("Could not connect to Dask!")
-        #         LOG.info("Connected to Dask")
-        #
-        #         return client, deploy_id
-        #
-        # return None
-
-
-    # def ee_remove(self, deploy_id=None):
-    #     """Remove EE deployment.
-    #
-    #     :param deploy_id: deployment ID
-    #
-    #     """
-    #     if deploy_id is not None:
-    #         for txn in self._config.txn():
-    #             deploy = txn.get_deployment(deploy_id)
-    #             txn.delete_deployment(deploy)
-
+        if self._x.is_alive():
+            print("Waiting...")
+            return False
+        else:
+            return True
