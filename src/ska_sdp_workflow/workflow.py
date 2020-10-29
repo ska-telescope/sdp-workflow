@@ -405,9 +405,8 @@ class Deployment:
         chart = {
             'chart': deploy_name,  # Helm chart deploy from the repo
         }
-        deploy_id = 'proc-{}-{}'.format(self._pb_id, deploy_name)
-        LOG.info(deploy_id)
-        deploy = ska_sdp_config.Deployment(deploy_id,
+        self._deploy_id = 'proc-{}-{}'.format(self._pb_id, deploy_name)
+        deploy = ska_sdp_config.Deployment(self._deploy_id,
                                            "helm", chart)
         for txn in self._config.txn():
             txn.create_deployment(deploy)
