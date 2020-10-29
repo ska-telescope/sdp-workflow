@@ -268,7 +268,7 @@ class Phase:
     def ee_deploy_dask(self, execute_func, args):
         """."""
 
-        return Deployment(self._pb_id, execute_func, args)
+        return Deployment(self._pb_id, self._config, execute_func, args)
         # workflow = self._pb.workflow
         # workflow_type = workflow['type']
         # return Phase(name, reservation, self._config,
@@ -420,9 +420,9 @@ class Phase:
 # -------------------------------------
 
 class Deployment:
-    def __init__(self, pb_id, execute_func, args):
+    def __init__(self, pb_id, config, execute_func, args):
         self._pb_id = pb_id
-        # self._config = config
+        self._config = config
 
         x = threading.Thread(target=self._deploy_dask, args=(execute_func, args))
         x.setDaemon(True)
@@ -439,7 +439,7 @@ class Deployment:
         # need to communicate with a scheduler process. But we are ignoring
         # all of that at the moment.
         LOG.info("Deploying Dask...")
-        deploy_id = 'proc-{}-dask'.format(self._pb.id)
+        deploy_id = 'proc-{}-dask'.format(self._pb_id)
         deploy = ska_sdp_config.Deployment(
             deploy_id, "helm", {
                 'chart': 'dask/dask',
