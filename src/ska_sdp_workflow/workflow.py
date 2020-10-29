@@ -265,11 +265,11 @@ class Phase:
         deploy_id = self._deploy.get_id()
         LOG.info("Deploy ID {}".format(deploy_id))
         self._deploy_id_list.append(deploy_id)
+        LOG.info("Deployment ID List - ", self._deploy_id_list)
 
     def ee_deploy_dask(self, execute_func, args):
         """Deploy Dask and return a handle."""
         return Deployment(self._pb_id, self._config, 'dask', execute_func, args)
-
 
     def is_sbi_finished(self, txn):
         """Checks if the sbi are finished or cancelled."""
@@ -409,7 +409,7 @@ class Deployment:
         deploy_id = 'proc-{}-{}'.format(self._pb_id, deploy_name)
         LOG.info(deploy_id)
         deploy = ska_sdp_config.Deployment(deploy_id,
-                                           "hel,", chart)
+                                           "helm,", chart)
         for txn in self._config.txn():
             txn.create_deployment(deploy)
 
