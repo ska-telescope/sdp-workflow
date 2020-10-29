@@ -210,22 +210,13 @@ class Phase:
         for the batch workflow.
         """
 
-        # Check if the pb is cancelled or sbi is finished or cancelled
         for txn in self._config.txn():
-            pb_state = txn.get_processing_block_state(self._pb_id)
-            pb_status = pb_state.get('status')
-            if pb_status in ['FINISHED', 'CANCELLED']:
-                raise Exception('PB is {}'.format(pb_state))
-
-            if self._workflow_type == 'realtime':
-                sbi = txn.get_scheduling_block(self._sbi_id)
-                sbi_status = sbi.get('status')
-                if sbi_status in ['FINISHED', 'CANCELLED']:
-                    raise Exception('PB is {}'.format(sbi_status))
+            self.check_state(txn)
 
         # Set state to indicate workflow is waiting for resources
         LOG.info('Setting status to WAITING')
         for txn in self._config.txn():
+            self.check_state(txn)
             state = txn.get_processing_block_state(self._pb_id)
             state['status'] = 'WAITING'
             txn.update_processing_block_state(self._pb_id, state)
@@ -233,6 +224,7 @@ class Phase:
         # Wait for resources_available to be true
         LOG.info('Waiting for resources to be available')
         for txn in self._config.txn():
+            self.check_state(txn)
             state = txn.get_processing_block_state(self._pb_id)
             ra = state.get('resources_available')
             if ra is not None and ra:
@@ -246,80 +238,42 @@ class Phase:
             self._event_loop = self._start_event_loop()
             LOG.info("Event loop started")
 
-            # spawn a pool of thread, and pass them queue instance
-            self._q = queue.Queue()
-            t = ProcessingThread(self._q)
-            t.setDaemon(True)
-            t.start()
-
-
-    def ee_deploy(self, deploy_name=None, deploy_type=None, chart=None,
-                  image=None, n_workers=1, buffers=[]):
-        """Deploy execution engine.
-
-        :param deploy_name: processing block ID
-        :param image: Docker image to deploy
-        :param n_workers: number of Dask workers
-        :param buffers: list of buffers to mount on Dask workers
-        :return: deployment ID and Dask client handle
-
-        """
         # Set state to indicate processing has started
         LOG.info('Setting status to RUNNING')
         for txn in self._config.txn():
+            self.check_state(txn)
             state = txn.get_processing_block_state(self._pb_id)
             state['status'] = 'RUNNING'
             txn.update_processing_block_state(self._pb_id, state)
 
-        # Make deployment
-        if deploy_name is not None:
-            deploy_id = 'proc-{}-{}'.format(self._pb_id, deploy_name)
-            if image is not None:
-                values = {'image': image, 'worker.replicas': n_workers}
-                for i, b in enumerate(buffers):
-                    values['buffers[{}]'.format(i)] = b
-                deploy = ska_sdp_config.Deployment(
-                    deploy_id, deploy_type, {'chart': 'dask', 'values': values}
-                )
-            else:
-                LOG.info(deploy_id)
-                deploy = ska_sdp_config.Deployment(deploy_id,
-                                                   deploy_type, chart)
-            LOG.info(deploy)
-            for txn in self._config.txn():
-                txn.create_deployment(deploy)
+            # # spawn a pool of thread, and pass them queue instance
+            # self._q = queue.Queue()
+            # t = ProcessingThread(self._q)
+            # t.setDaemon(True)
+            # t.start()
 
+    def check_state(self, txn):
+        """Check if the pb is cancelled or sbi is finished or cancelled"""
+        LOG.info("Checking PB and SBI states")
+        pb_state = txn.get_processing_block_state(self._pb_id)
+        pb_status = pb_state.get('status')
+        if pb_status in ['FINISHED', 'CANCELLED']:
+            raise Exception('PB is {}'.format(pb_state))
 
-            self._deploy_id_list.append(deploy_id)
+        if self._workflow_type == 'realtime':
+            sbi = txn.get_scheduling_block(self._sbi_id)
+            sbi_status = sbi.get('status')
+            if sbi_status in ['FINISHED', 'CANCELLED']:
+                raise Exception('PB is {}'.format(sbi_status))
 
-            if self._workflow_type == 'batch':
-                LOG.info("Waiting for Scheduler to become available...")
-                client = None
-                for _ in range(200):
-                    try:
-                        client = distributed.Client(
-                            deploy_id + '-scheduler.' +
-                            os.environ['SDP_HELM_NAMESPACE'] + ':8786')
-                    except Exception as e:
-                        print(e)
-                if client is None:
-                    raise Exception("Could not connect to Dask!")
-                LOG.info("Connected to Dask")
+    def ee_deploy_dask(self, execute_func):
+        """."""
 
-                return client, deploy_id
-
-        return None
-
-    def ee_remove(self, deploy_id=None):
-        """Remove EE deployment.
-
-        :param deploy_id: deployment ID
-
-        """
-        if deploy_id is not None:
-            for txn in self._config.txn():
-                deploy = txn.get_deployment(deploy_id)
-                txn.delete_deployment(deploy)
+        return Deployment(self._pb_id, self._config, execute_func)
+        # workflow = self._pb.workflow
+        # workflow_type = workflow['type']
+        # return Phase(name, reservation, self._config,
+        #              self._pb_id, self._sbi_id, workflow_type)
 
     def is_deploy_finished(self):
         """Waits until all the deployments are finished and removed
@@ -345,6 +299,7 @@ class Phase:
             LOG.info('SBI is %s', status)
             self._status = status
             finished = True
+
         else:
             finished = False
 
@@ -393,19 +348,19 @@ class Phase:
 
             txn.loop(wait=True)
 
-    def process_task(self, processes):
-        """Spawn a thread and pass the processes to queue."""
-
-        for process in processes:
-            self._q.put(process)
-
-        while not self._q.empty():
-            pass
-
-        LOG.info("Queue is empty")
-        self._q.join()
-        LOG.info("Processing Done")
-        self.update_pb_state()
+    # def process_task(self, processes):
+    #     """Spawn a thread and pass the processes to queue."""
+    #
+    #     for process in processes:
+    #         self._q.put(process)
+    #
+    #     while not self._q.empty():
+    #         pass
+    #
+    #     LOG.info("Queue is empty")
+    #     self._q.join()
+    #     LOG.info("Processing Done")
+    #     self.update_pb_state()
 
     def _start_event_loop(self):
         """Start event loop"""
@@ -462,21 +417,119 @@ class Phase:
                 self.update_pb_state()
 
 # -------------------------------------
-# Processing Thread Class
+# Deployment Class
 # -------------------------------------
 
+class Deployment:
+    def __init__(self, pb_id, config, execute_func):
+        self._pb_id = pb_id
+        self._config = config
 
-class ProcessingThread(threading.Thread):
-    """Add process to the queue and execute sequentially."""
+        # TODO NEED TO SPAWN THIS INTO A SEPERATE THREAD
 
-    def __init__(self, queue):
-        threading.Thread.__init__(self)
-        self.queue = queue
+        """Deploy execution engine.
 
-    def run(self):
-        while True:
-            task = self.queue.get()
-            func = task[0]
-            args = task[1:]
-            func(*args)
-            self.queue.task_done()
+        :param deploy_name: processing block ID
+        :param image: Docker image to deploy
+        :param n_workers: number of Dask workers
+        :param buffers: list of buffers to mount on Dask workers
+        :return: deployment ID and Dask client handle
+
+        """
+        # Deploy Dask with 2 workers.
+        # This is done by adding the request to the configuration database,
+        # where it will be picked up and executed by appropriate
+        # controllers. In the full system this will involve external checks
+        # for whether the workflow actually has been assigned enough resources
+        # to do this - and for obtaining such assignments the workflow would
+        # need to communicate with a scheduler process. But we are ignoring
+        # all of that at the moment.
+        LOG.info("Deploying Dask...")
+        deploy_id = 'proc-{}-dask'.format(self._pb.id)
+        deploy = ska_sdp_config.Deployment(
+            deploy_id, "helm", {
+                'chart': 'dask/dask',
+                'values': {
+                    'jupyter.enabled': 'false',
+                    'jupyter.rbac': 'false',
+                    'worker.replicas': 2,
+                    # We want to access Dask in-cluster using a DNS name
+                    'scheduler.serviceType': 'ClusterIP'
+                }})
+        for txn in self._config.txn():
+            txn.create_deployment(deploy)
+
+        # Wait for Dask to become available. At some point there will be a
+        # way to learn about availability from the configuration database
+        # (clearly populated by controllers querying Helm/Kubernetes).  So
+        # for the moment we'll simply query the DNS name where we know
+        # that Dask must become available eventually
+        LOG.info("Waiting for Dask...")
+        client = None
+
+        # This needs to be done in a seperate thread
+        for _ in range(200):
+            try:
+                client = distributed.Client(
+                    deploy_id + '-scheduler.' +
+                    os.environ['SDP_HELM_NAMESPACE'] + ':8786')
+            except Exception as e:
+                print(e)
+        if client is None:
+            LOG.error("Could not connect to Dask!")
+            sys.exit(1)
+        LOG.info("Connected to Dask")
+
+    def is_finished(self):
+        pass
+
+        # # Make deployment
+        # if deploy_name is not None:
+        #     deploy_id = 'proc-{}-{}'.format(self._pb_id, deploy_name)
+        #     if image is not None:
+        #         values = {'image': image, 'worker.replicas': n_workers}
+        #         for i, b in enumerate(buffers):
+        #             values['buffers[{}]'.format(i)] = b
+        #         deploy = ska_sdp_config.Deployment(
+        #             deploy_id, deploy_type, {'chart': 'dask', 'values': values}
+        #         )
+        #     else:
+        #         LOG.info(deploy_id)
+        #         deploy = ska_sdp_config.Deployment(deploy_id,
+        #                                            deploy_type, chart)
+        #     LOG.info(deploy)
+        #     for txn in self._config.txn():
+        #         txn.create_deployment(deploy)
+        #
+        #     self._deploy_id_list.append(deploy_id)
+        #
+        #     if self._workflow_type == 'batch':
+        #         LOG.info("Waiting for Scheduler to become available...")
+        #         client = None
+        #         for _ in range(200):
+        #             try:
+        #                 client = distributed.Client(
+        #                     deploy_id + '-scheduler.' +
+        #                     os.environ['SDP_HELM_NAMESPACE'] + ':8786')
+        #             except Exception as e:
+        #                 print(e)
+        #         if client is None:
+        #             raise Exception("Could not connect to Dask!")
+        #         LOG.info("Connected to Dask")
+        #
+        #         return client, deploy_id
+        #
+        # return None
+
+
+    # def ee_remove(self, deploy_id=None):
+    #     """Remove EE deployment.
+    #
+    #     :param deploy_id: deployment ID
+    #
+    #     """
+    #     if deploy_id is not None:
+    #         for txn in self._config.txn():
+    #             deploy = txn.get_deployment(deploy_id)
+    #             txn.delete_deployment(deploy)
+
