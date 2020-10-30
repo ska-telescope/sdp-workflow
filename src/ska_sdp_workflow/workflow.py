@@ -266,9 +266,9 @@ class Phase:
         LOG.info("Deploy ID {}".format(deploy_id))
         self._deploy_id_list.append(deploy_id)
 
-    def ee_deploy_dask(self, execute_func, args):
+    def ee_deploy_dask(self, func, f_args, instance):
         """Deploy Dask and return a handle."""
-        return Deployment(self._pb_id, self._config, 'dask', execute_func, args)
+        return Deployment(self._pb_id, self._config, 'dask', func, f_args, instance)
 
     def is_sbi_finished(self, txn):
         """Checks if the sbi are finished or cancelled."""
@@ -386,20 +386,20 @@ class Phase:
 
 class Deployment:
     def __init__(self, pb_id, config, deploy_name=None,
-                 execute_func=None, args=None):
+                 execute_func=None, f_args=None, instance=None):
         self._pb_id = pb_id
         self._config = config
         self._deploy_id = None
         self._deploy_flag = False
 
         if deploy_name == 'dask':
-            x = threading.Thread(target=self._deploy_dask, args=(execute_func, args))
+            x = threading.Thread(target=self.deploy_dask, args=(execute_func, f_args, instance))
             x.setDaemon(True)
             x.start()
         else:
-            self._ee_deploy(deploy_name)
+            self.ee_deploy(deploy_name)
 
-    def _ee_deploy(self, deploy_name):
+    def ee_deploy(self, deploy_name):
         """Deploy Execution Engines."""
         LOG.info("Deploying {} Workflow...".format(deploy_name))
         chart = {
@@ -411,7 +411,7 @@ class Deployment:
         for txn in self._config.txn():
             txn.create_deployment(deploy)
 
-    def _deploy_dask(self, func, args):
+    def deploy_dask(self, func, f_args, instance):
         # Deploy Dask with 2 workers.
         # This is done by adding the request to the configuration database,
         # where it will be picked up and executed by appropriate
@@ -421,7 +421,10 @@ class Deployment:
         # need to communicate with a scheduler process. But we are ignoring
         # all of that at the moment.
         LOG.info("Deploying Dask...")
-        self._deploy_id = 'proc-{}-dask'.format(self._pb_id)
+        if instance is not None:
+            self._deploy_id = 'proc-{}-dask-{}'.format(self._pb_id, instance)
+        else:
+            self._deploy_id = 'proc-{}-dask'.format(self._pb_id)
         deploy = ska_sdp_config.Deployment(
             self._deploy_id, "helm", {
                 'chart': 'dask/dask',
