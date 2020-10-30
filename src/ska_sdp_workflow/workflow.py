@@ -459,7 +459,7 @@ class Deployment:
         LOG.info("Connected to Dask")
 
         # Doing some silly calculation
-        func(*args)
+        func(*f_args)
 
         self._deploy_flag = True
 
