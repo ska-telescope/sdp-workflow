@@ -267,7 +267,7 @@ class Phase:
             LOG.info("Deploy ID {}".format(deploy_id))
             self._deploy_id_list.append(deploy_id)
         else:
-            return Deployment(self._pb_id, self._config, func, f_args)
+            return Deployment(self._pb_id, self._config, func=func, f_args=f_args)
 
     def ee_deploy_dask(self, name, func, f_args):
         """Deploy Dask and return a handle."""
@@ -390,19 +390,22 @@ class Phase:
 
 class Deployment:
     def __init__(self, pb_id, config, deploy_name=None,
-                 execute_func=None, f_args=None,):
+                 func=None, f_args=None,):
         self._pb_id = pb_id
         self._config = config
         self._deploy_id = None
         self._deploy_flag = False
 
-        if 'dask' in deploy_name:
-            x = threading.Thread(target=self.deploy_dask,
-                                 args=(deploy_name, execute_func, f_args))
-            x.setDaemon(True)
-            x.start()
+        if deploy_name is not None:
+            if 'dask' in deploy_name:
+                x = threading.Thread(target=self.deploy_dask,
+                                     args=(deploy_name, func, f_args))
+                x.setDaemon(True)
+                x.start()
+            else:
+                self.deploy(deploy_name)
         else:
-            self.ee_deploy(deploy_name)
+            self.deploy(func=func, f_args=f_args)
 
     def deploy(self, deploy_name=None, func=None, f_args=None):
         """Deploy Execution Engine."""
