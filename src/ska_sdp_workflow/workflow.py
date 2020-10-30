@@ -260,15 +260,18 @@ class Phase:
             if sbi_status in ['FINISHED', 'CANCELLED']:
                 raise Exception('PB is {}'.format(sbi_status))
 
-    def ee_deploy(self, deploy_name):
-        self._deploy = Deployment(self._pb_id, self._config, deploy_name)
-        deploy_id = self._deploy.get_id()
-        LOG.info("Deploy ID {}".format(deploy_id))
-        self._deploy_id_list.append(deploy_id)
+    def ee_deploy(self, deploy_name=None, func=None, f_args=None):
+        if deploy_name is not None:
+            self._deploy = Deployment(self._pb_id, self._config, deploy_name)
+            deploy_id = self._deploy.get_id()
+            LOG.info("Deploy ID {}".format(deploy_id))
+            self._deploy_id_list.append(deploy_id)
+        else:
+            return Deployment(self._pb_id, self._config, func, f_args)
 
-    def ee_deploy_dask(self, func, f_args, instance):
+    def ee_deploy_dask(self, name, func, f_args):
         """Deploy Dask and return a handle."""
-        return Deployment(self._pb_id, self._config, 'dask', func, f_args, instance)
+        return Deployment(self._pb_id, self._config, name, func, f_args)
 
     def is_sbi_finished(self, txn):
         """Checks if the sbi are finished or cancelled."""
@@ -384,34 +387,45 @@ class Phase:
 # Deployment Class
 # -------------------------------------
 
+
 class Deployment:
     def __init__(self, pb_id, config, deploy_name=None,
-                 execute_func=None, f_args=None, instance=None):
+                 execute_func=None, f_args=None,):
         self._pb_id = pb_id
         self._config = config
         self._deploy_id = None
         self._deploy_flag = False
 
-        if deploy_name == 'dask':
-            x = threading.Thread(target=self.deploy_dask, args=(execute_func, f_args, instance))
+        if 'dask' in deploy_name:
+            x = threading.Thread(target=self.deploy_dask,
+                                 args=(deploy_name, execute_func, f_args))
             x.setDaemon(True)
             x.start()
         else:
             self.ee_deploy(deploy_name)
 
-    def ee_deploy(self, deploy_name):
-        """Deploy Execution Engines."""
-        LOG.info("Deploying {} Workflow...".format(deploy_name))
-        chart = {
-            'chart': deploy_name,  # Helm chart deploy from the repo
-        }
-        self._deploy_id = 'proc-{}-{}'.format(self._pb_id, deploy_name)
-        deploy = ska_sdp_config.Deployment(self._deploy_id,
-                                           "helm", chart)
-        for txn in self._config.txn():
-            txn.create_deployment(deploy)
+    def deploy(self, deploy_name=None, func=None, f_args=None):
+        """Deploy Execution Engine."""
 
-    def deploy_dask(self, func, f_args, instance):
+        if deploy_name is not None:
+            LOG.info("Deploying {} Workflow...".format(deploy_name))
+            chart = {
+                'chart': deploy_name,  # Helm chart deploy from the repo
+            }
+            self._deploy_id = 'proc-{}-{}'.format(self._pb_id, deploy_name)
+            deploy = ska_sdp_config.Deployment(self._deploy_id,
+                                               "helm", chart)
+            for txn in self._config.txn():
+                txn.create_deployment(deploy)
+        else:
+            LOG.info("Pretending to Create deployment.")
+            # Running function to do some processing
+            func(*f_args)
+            LOG.info("Processing Done")
+            self._deploy_flag = True
+
+    def deploy_dask(self, deploy_name, func, f_args):
+        """Deploy Dask."""
         # Deploy Dask with 2 workers.
         # This is done by adding the request to the configuration database,
         # where it will be picked up and executed by appropriate
@@ -421,10 +435,7 @@ class Deployment:
         # need to communicate with a scheduler process. But we are ignoring
         # all of that at the moment.
         LOG.info("Deploying Dask...")
-        if instance is not None:
-            self._deploy_id = 'proc-{}-dask-{}'.format(self._pb_id, instance)
-        else:
-            self._deploy_id = 'proc-{}-dask'.format(self._pb_id)
+        self._deploy_id = 'proc-{}-{}'.format(self._pb_id, deploy_name)
         deploy = ska_sdp_config.Deployment(
             self._deploy_id, "helm", {
                 'chart': 'dask/dask',
@@ -468,7 +479,7 @@ class Deployment:
         return self._deploy_id
 
     def remove(self, deploy_id=None):
-        """Remove EE Deploy."""
+        """Remove Execution Engine."""
         if deploy_id is not None:
             self._deploy_id = deploy_id
         for txn in self._config.txn():
@@ -476,6 +487,7 @@ class Deployment:
             txn.delete_deployment(deploy)
 
     def is_finished(self):
+        """Checking if the deployment is finished."""
         if self._deploy_flag:
             self.remove()
             return True
