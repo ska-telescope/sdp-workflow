@@ -476,7 +476,7 @@ class Deployment:
         if self._deploy_id not in txn.list_deployments():
             raise Exception("Deployment not found in the list")
 
-        LOG.info(self._deploy_flag
+        LOG.info(self._deploy_flag)
         if self._deploy_flag:
             self.remove()
             return True
