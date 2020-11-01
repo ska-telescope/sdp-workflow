@@ -125,22 +125,18 @@ class ProcessingBlock:
                      self._pb_id, self._sbi_id, workflow_type)
 
     def wait_loop(self):
-        """Wait loop.
+        """Wait loop."""
+        for txn in self._config.txn():
+            state = txn.get_processing_block_state(self._pb_id)
+            pb_status = state.get('status')
+            if pb_status in ['FINISHED', 'CANCELLED']:
+                if pb_status is 'CANCELLED':
+                    raise Exception('PB is {}'.format(pb_status))
 
-        # Check if the pb is cancelled or sbi is finished or cancelled"""
+            if not txn.is_processing_block_owner(self._pb_id):
+                raise Exception("Lost ownership of the processing block")
 
-        return self._config.txn()
-        # for txn in self._config.txn():
-        #     LOG.info("Checking Processing block state")
-        #     pb_state = txn.get_processing_block_state(self._pb_id)
-        #     pb_status = pb_state.get('status')
-        #     if pb_status in ['FINISHED', 'CANCELLED']:
-        #         raise Exception('PB is {}'.format(pb_state))
-        #
-        #     if not txn.is_processing_block_owner(self._pb_id):
-        #         raise Exception("Lost ownership of the processing block")
-        #
-        #     yield txn
+        return txn
 
     def exit(self):
         """Close connection to config DB."""
@@ -250,12 +246,6 @@ class Phase:
                 break
             txn.loop(wait=True)
 
-        # # Create an event loop here
-        # if self._workflow_type == 'batch':
-        #     # Start event loop
-        #     self._event_loop = self._start_event_loop()
-        #     LOG.info("Event loop started")
-
         # Set state to indicate processing has started
         LOG.info('Setting status to RUNNING')
         for txn in self._config.txn():
@@ -349,33 +339,6 @@ class Phase:
                 break
 
             txn.loop(wait=True)
-
-    # def _start_event_loop(self):
-    #     """Start event loop"""
-    #     thread = threading.Thread(
-    #         target=self._check_status, name='EventLoop', daemon=True
-    #     )
-    #     thread.start()
-
-    # def _check_status(self):
-    #     """Watch for changes in the config db"""
-    #
-    #     for txn in self._config.txn():
-    #         state = txn.get_processing_block_state(self._pb_id)
-    #         pb_status = state.get('status')
-    #         LOG.info("PB Status %s", pb_status)
-    #         if pb_status in ['FINISHED', 'CANCELLED']:
-    #             if pb_status is 'CANCELLED':
-    #                 self._q.queue.clear()
-    #                 raise Exception('PB is {}'.format(pb_status))
-    #             break
-    #         else:
-    #             LOG.info("Watching Config DB for changes...")
-    #
-    #         if not txn.is_processing_block_owner(self._pb_id):
-    #             raise Exception("Lost ownership of the processing block")
-    #
-    #         txn.loop(wait=True)
 
     def __exit__(self, exc_type, exc_val, exc_tb):
         """Before exiting the phase class, checks if the sbi is marked as
@@ -510,30 +473,19 @@ class Deployment:
     def is_finished(self, txn):
         """Checking if the deployment is finished."""
 
-        state = txn.get_processing_block_state(self._pb_id)
-        pb_status = state.get('status')
-        if pb_status in ['FINISHED', 'CANCELLED']:
-            if pb_status is 'CANCELLED':
-                self.remove()
-                raise Exception('PB is {}'.format(pb_status))
-        else:
-            LOG.info("Watching Config DB for changes...")
+        if self._deploy_id not in txn.list_deployments():
+            raise Exception("Deployment not found in the list")
 
-        if not txn.is_processing_block_owner(self._pb_id):
-            self.remove()
-            raise Exception("Lost ownership of the processing block")
-
+        LOG.info(self._deploy_id)
         if self._deploy_flag:
             self.remove()
             return True
-
-        txn.loop(wait=True)
 
 
 class HelmDeploy:
     def __init__(self):
         pass
-    
+
 
 class DaskDeploy:
     def __init__(self):
