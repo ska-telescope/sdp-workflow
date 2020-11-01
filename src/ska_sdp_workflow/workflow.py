@@ -126,7 +126,7 @@ class ProcessingBlock:
     def wait_loop(self):
         """Wait loop to check if pb state and ownership."""
         for txn in self._config.txn():
-            LOG.info("Checking the PB state and ownership.")
+            LOG.info("Checking PB state.")
             state = txn.get_processing_block_state(self._pb_id)
             pb_status = state.get('status')
             if pb_status in ['FINISHED', 'CANCELLED']:
@@ -136,7 +136,7 @@ class ProcessingBlock:
             if not txn.is_processing_block_owner(self._pb_id):
                 raise Exception("Lost ownership of the processing block")
 
-            txn.loop(wait=True)
+            yield txn
 
     def exit(self):
         """Close connection to config DB."""
@@ -491,3 +491,4 @@ class DaskDeploy:
         if self._deploy_flag:
             self.remove(txn)
             return True
+        return False
