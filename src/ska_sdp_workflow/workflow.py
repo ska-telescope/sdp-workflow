@@ -124,6 +124,21 @@ class ProcessingBlock:
         return Phase(name, reservation, self._config,
                      self._pb_id, self._sbi_id, workflow_type)
 
+    def wait_loop(self):
+        """Wait loop.
+        Check if the pb is cancelled or sbi is finished or cancelled"""
+        for txn in self._config.txn():
+            LOG.info("Checking Processing block state")
+            pb_state = txn.get_processing_block_state(self._pb_id)
+            pb_status = pb_state.get('status')
+            if pb_status in ['FINISHED', 'CANCELLED']:
+                raise Exception('PB is {}'.format(pb_state))
+
+            if not txn.is_processing_block_owner(self._pb_id):
+                raise Exception("Lost ownership of the processing block")
+
+            yield txn
+
     def exit(self):
         """Close connection to config DB."""
 
@@ -491,6 +506,7 @@ class Deployment:
 
     def is_finished(self):
         """Checking if the deployment is finished."""
+        
         if self._deploy_flag:
             self.remove()
             return True
