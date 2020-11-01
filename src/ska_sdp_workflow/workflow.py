@@ -136,7 +136,7 @@ class ProcessingBlock:
             if not txn.is_processing_block_owner(self._pb_id):
                 raise Exception("Lost ownership of the processing block")
 
-        return txn
+        yield txn
 
     def exit(self):
         """Close connection to config DB."""
