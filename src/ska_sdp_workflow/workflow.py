@@ -125,8 +125,9 @@ class ProcessingBlock:
                      self._pb_id, self._sbi_id, workflow_type)
 
     def wait_loop(self):
-        """Wait loop."""
+        """Wait loop to check if pb state and ownership."""
         for txn in self._config.txn():
+            LOG.info("Checking the PB state and ownership.")
             state = txn.get_processing_block_state(self._pb_id)
             pb_status = state.get('status')
             if pb_status in ['FINISHED', 'CANCELLED']:
@@ -178,7 +179,8 @@ class ProcessingBlock:
         receive_addresses = {}
         for scan_type in scan_types:
             channels = scan_type.get('channels')
-            receive_addresses[scan_type.get('id')] = self._minimal_receive_addresses(channels)
+            receive_addresses[scan_type.get('id')] = \
+                self._minimal_receive_addresses(channels)
         return receive_addresses
 
 
@@ -256,13 +258,14 @@ class Phase:
 
     def check_state(self, txn):
         """Check if the pb is cancelled or sbi is finished or cancelled"""
-        LOG.info("Checking PB and SBI states")
+        LOG.info("Checking PB state")
         pb_state = txn.get_processing_block_state(self._pb_id)
         pb_status = pb_state.get('status')
         if pb_status in ['FINISHED', 'CANCELLED']:
             raise Exception('PB is {}'.format(pb_state))
 
         if self._workflow_type == 'realtime':
+            LOG.info("Checking SBI state")
             sbi = txn.get_scheduling_block(self._sbi_id)
             sbi_status = sbi.get('status')
             if sbi_status in ['FINISHED', 'CANCELLED']:
@@ -270,16 +273,15 @@ class Phase:
 
     def ee_deploy(self, deploy_name=None, func=None, f_args=None):
         if deploy_name is not None:
-            self._deploy = Deployment(self._pb_id, self._config, deploy_name)
+            self._deploy = HelmDeploy(self._pb_id, self._config, deploy_name)
             deploy_id = self._deploy.get_id()
-            LOG.info("Deploy ID {}".format(deploy_id))
             self._deploy_id_list.append(deploy_id)
         else:
-            return Deployment(self._pb_id, self._config, func=func, f_args=f_args)
+            return HelmDeploy(self._pb_id, self._config, func=func, f_args=f_args)
 
     def ee_deploy_dask(self, name, func, f_args):
         """Deploy Dask and return a handle."""
-        return Deployment(self._pb_id, self._config, name, func, f_args)
+        return DaskDeploy(self._pb_id, self._config, name, func, f_args)
 
     def is_sbi_finished(self, txn):
         """Checks if the sbi are finished or cancelled."""
@@ -288,7 +290,6 @@ class Phase:
         if status in ['FINISHED', 'CANCELLED']:
             if status is 'CANCELLED':
                 raise Exception('SBI is {}'.format(status))
-            LOG.info('SBI is %s', status)
             self._status = status
             finished = True
 
@@ -309,7 +310,6 @@ class Phase:
             # Set state to indicate processing has ended
             state = txn.get_processing_block_state(self._pb_id)
             if self._status is None:
-                LOG.info('Setting PB status to FINISHED')
                 state['status'] = 'FINISHED'
             else:
                 LOG.info('Setting PB status to %s', self._status)
@@ -364,12 +364,8 @@ class Phase:
         else:
             self.update_pb_state()
 
-# -------------------------------------
-# Deployment Class
-# -------------------------------------
 
-
-class Deployment:
+class HelmDeploy:
     def __init__(self, pb_id, config, deploy_name=None,
                  func=None, f_args=None,):
         self._pb_id = pb_id
@@ -378,13 +374,7 @@ class Deployment:
         self._deploy_flag = False
 
         if deploy_name is not None:
-            if 'dask' in deploy_name:
-                x = threading.Thread(target=self.deploy_dask,
-                                     args=(deploy_name, func, f_args))
-                x.setDaemon(True)
-                x.start()
-            else:
-                self.deploy(deploy_name)
+            self.deploy(deploy_name)
         else:
             self.deploy(func=func, f_args=f_args)
 
@@ -407,6 +397,28 @@ class Deployment:
             func(*f_args)
             LOG.info("Processing Done")
             self._deploy_flag = True
+
+    def remove(self, deploy_id=None):
+        """Remove Execution Engine."""
+        if deploy_id is not None:
+            self._deploy_id = deploy_id
+        for txn in self._config.txn():
+            deploy = txn.get_deployment(self._deploy_id)
+            txn.delete_deployment(deploy)
+
+
+class DaskDeploy:
+    def __init__(self, pb_id, config, deploy_name=None,
+                 func=None, f_args=None,):
+        self._pb_id = pb_id
+        self._config = config
+        self._deploy_id = None
+        self._deploy_flag = False
+
+        x = threading.Thread(target=self.deploy_dask,
+                             args=(deploy_name, func, f_args))
+        x.setDaemon(True)
+        x.start()
 
     def deploy_dask(self, deploy_name, func, f_args):
         """Deploy Dask."""
@@ -462,31 +474,19 @@ class Deployment:
         """Get deployment id"""
         return self._deploy_id
 
-    def remove(self, deploy_id=None):
+    def remove(self, txn):
         """Remove Execution Engine."""
-        if deploy_id is not None:
-            self._deploy_id = deploy_id
-        for txn in self._config.txn():
-            deploy = txn.get_deployment(self._deploy_id)
-            txn.delete_deployment(deploy)
+        # for txn in self._config.txn():
+        deploy = txn.get_deployment(self._deploy_id)
+        txn.delete_deployment(deploy)
 
     def is_finished(self, txn):
         """Checking if the deployment is finished."""
 
-        if self._deploy_id not in txn.list_deployments():
-            raise Exception("Deployment not found in the list")
+        # if self._deploy_id not in txn.list_deployments():
+        #     raise Exception("Deployment not found in the list")
 
         LOG.info(self._deploy_flag)
         if self._deploy_flag:
-            self.remove()
+            self.remove(txn)
             return True
-
-
-class HelmDeploy:
-    def __init__(self):
-        pass
-
-
-class DaskDeploy:
-    def __init__(self):
-        pass
