@@ -7,7 +7,6 @@ import sys
 import threading
 # import ska.logging
 import ska_sdp_config
-import queue
 import os
 import distributed
 
@@ -137,7 +136,7 @@ class ProcessingBlock:
             if not txn.is_processing_block_owner(self._pb_id):
                 raise Exception("Lost ownership of the processing block")
 
-            yield txn
+            txn.loop(wait=True)
 
     def exit(self):
         """Close connection to config DB."""
@@ -364,6 +363,10 @@ class Phase:
         else:
             self.update_pb_state()
 
+# -------------------------------------
+# Helm Deploy Class
+# -------------------------------------
+
 
 class HelmDeploy:
     def __init__(self, pb_id, config, deploy_name=None,
@@ -371,7 +374,6 @@ class HelmDeploy:
         self._pb_id = pb_id
         self._config = config
         self._deploy_id = None
-        self._deploy_flag = False
 
         if deploy_name is not None:
             self.deploy(deploy_name)
@@ -396,7 +398,6 @@ class HelmDeploy:
             # Running function to do some processing
             func(*f_args)
             LOG.info("Processing Done")
-            self._deploy_flag = True
 
     def remove(self, deploy_id=None):
         """Remove Execution Engine."""
@@ -405,6 +406,10 @@ class HelmDeploy:
         for txn in self._config.txn():
             deploy = txn.get_deployment(self._deploy_id)
             txn.delete_deployment(deploy)
+
+# -------------------------------------
+# Dask Deploy Class
+# -------------------------------------
 
 
 class DaskDeploy:
@@ -476,15 +481,11 @@ class DaskDeploy:
 
     def remove(self, txn):
         """Remove Execution Engine."""
-        # for txn in self._config.txn():
         deploy = txn.get_deployment(self._deploy_id)
         txn.delete_deployment(deploy)
 
     def is_finished(self, txn):
         """Checking if the deployment is finished."""
-
-        # if self._deploy_id not in txn.list_deployments():
-        #     raise Exception("Deployment not found in the list")
 
         LOG.info(self._deploy_flag)
         if self._deploy_flag:
