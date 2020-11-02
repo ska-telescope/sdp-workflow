@@ -291,7 +291,6 @@ class Phase:
                 raise Exception('SBI is {}'.format(status))
             self._status = status
             finished = True
-
         else:
             finished = False
 
@@ -479,16 +478,15 @@ class DaskDeploy:
         """Get deployment id"""
         return self._deploy_id
 
-    def remove(self, txn):
+    def remove(self):
         """Remove Execution Engine."""
-        deploy = txn.get_deployment(self._deploy_id)
-        txn.delete_deployment(deploy)
+        for txn in self._config.txn():
+            deploy = txn.get_deployment(self._deploy_id)
+            txn.delete_deployment(deploy)
 
-    def is_finished(self, txn):
+    def is_finished(self):
         """Checking if the deployment is finished."""
-
-        LOG.info(self._deploy_flag)
         if self._deploy_flag:
-            self.remove(txn)
+            self.remove()
             return True
         return False
