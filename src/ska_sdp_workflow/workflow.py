@@ -75,6 +75,8 @@ class ProcessingBlock:
     def get_parameters(self, schema=None):
         """Get workflow parameters from processing block.
 
+        :param schema: schema to validate
+
         :returns: pb_parameters
         """
         parameters = self._pb.parameters
@@ -177,7 +179,11 @@ class BufferRequest:
     """Buffer request class. Currently just a placeholder."""
 
     def __init__(self, size, tags):
-        """Initialise"""
+        """Initialise
+
+        :param size: size of the buffer
+        :param tags: type of the buffer
+        """
         LOG.info("Buffer Requested")
 
 
@@ -190,7 +196,16 @@ class Phase:
 
     def __init__(self, name, list_reservations, config, pb_id,
                  sbi_id, workflow_type):
-        """Initialise"""
+        """Initialise
+
+        :param name: name of the pahse
+        :param list_reservations: list of reservations
+        :param config: config DB
+        :param pb_id: processing block ID
+        :param sbi_id: scheduling block instance ID
+        :param workflow_type: workflow type
+
+        """
         self._name = name
         self._reservations = list_reservations
         self._config = config
@@ -241,7 +256,11 @@ class Phase:
             txn.update_processing_block_state(self._pb_id, state)
 
     def check_state(self, txn):
-        """Check if the pb is cancelled or sbi is finished or cancelled"""
+        """Check if the pb is cancelled or sbi is finished or cancelled
+
+        :param txn: config db transaction
+
+        """
         LOG.info("Checking PB state")
         pb_state = txn.get_processing_block_state(self._pb_id)
         pb_status = pb_state.get('status')
@@ -256,6 +275,13 @@ class Phase:
                 raise Exception('PB is {}'.format(sbi_status))
 
     def ee_deploy(self, deploy_name=None, func=None, f_args=None):
+        """Deploy Execution Engine and return handle.
+
+        :param deploy_name: deploy name
+        :param func: function to process
+        :param f_args: function arguments
+
+        """
         if deploy_name is not None:
             self._deploy = HelmDeploy(self._pb_id, self._config, deploy_name)
             deploy_id = self._deploy.get_id()
@@ -264,11 +290,21 @@ class Phase:
             return HelmDeploy(self._pb_id, self._config, func=func, f_args=f_args)
 
     def ee_deploy_dask(self, name, func, f_args):
-        """Deploy Dask and return a handle."""
+        """Deploy Dask and return a handle.
+
+        :param name: deploy name
+        :param func: function to process
+        :param f_args: function arguments
+
+        """
         return DaskDeploy(self._pb_id, self._config, name, func, f_args)
 
     def is_sbi_finished(self, txn):
-        """Checks if the sbi are finished or cancelled."""
+        """Checks if the sbi are finished or cancelled.
+
+        :param txn: config db transaction
+
+        """
         sbi = txn.get_scheduling_block(self._sbi_id)
         status = sbi.get('status')
         if status in ['FINISHED', 'CANCELLED']:
@@ -353,8 +389,18 @@ class Phase:
 
 
 class HelmDeploy:
+    """Helm Deployment."""
     def __init__(self, pb_id, config, deploy_name=None,
                  func=None, f_args=None,):
+        """Initialise.
+
+        :param pb_id: processing block ID
+        :param config: config DB
+        :param deploy_name: deployment name
+        :param func: function to process
+        :param f_args: function arguments
+
+        """
         self._pb_id = pb_id
         self._config = config
         self._deploy_id = None
@@ -365,8 +411,13 @@ class HelmDeploy:
             self.deploy(func=func, f_args=f_args)
 
     def deploy(self, deploy_name=None, func=None, f_args=None):
-        """Deploy Execution Engine."""
+        """Deploy Helm.
 
+        :param deploy_name: deployment name
+        :param func: function to process
+        :param f_args: function arguments
+
+        """
         if deploy_name is not None:
             LOG.info("Deploying {} Workflow...".format(deploy_name))
             chart = {
@@ -384,7 +435,11 @@ class HelmDeploy:
             LOG.info("Processing Done")
 
     def remove(self, deploy_id=None):
-        """Remove Execution Engine."""
+        """Remove Execution Engine.
+
+        :param deploy_id: Deployment ID
+
+        """
         if deploy_id is not None:
             self._deploy_id = deploy_id
         for txn in self._config.txn():
@@ -397,8 +452,19 @@ class HelmDeploy:
 
 
 class DaskDeploy:
+    """Deploy Dask Execution Engine"""
     def __init__(self, pb_id, config, deploy_name=None,
                  func=None, f_args=None,):
+        """Initialise.
+
+        :param pb_id: processing block ID
+        :param config: config DB
+        :param deploy_name: deployment name
+        :param func: function to process
+        :param f_args: function arguments
+
+        """
+
         self._pb_id = pb_id
         self._config = config
         self._deploy_id = None
@@ -410,7 +476,13 @@ class DaskDeploy:
         x.start()
 
     def deploy_dask(self, deploy_name, func, f_args):
-        """Deploy Dask."""
+        """Deploy Dask.
+
+        :param deploy_name: deployment name
+        :param func: function to process
+        :param f_args: function arguments
+
+        """
         # Deploy Dask with 2 workers.
         # This is done by adding the request to the configuration database,
         # where it will be picked up and executed by appropriate
@@ -471,7 +543,7 @@ class DaskDeploy:
             txn.delete_deployment(deploy)
 
     def is_finished(self):
-        """Checking if the deployment is finished."""
+        """Checking the pb state check if the deployment is finished."""
         for txn in self._config.txn():
             state = txn.get_processing_block_state(self._pb_id)
             pb_status = state.get('status')
