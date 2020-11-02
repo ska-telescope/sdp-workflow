@@ -123,18 +123,6 @@ class ProcessingBlock:
         return Phase(name, reservation, self._config,
                      self._pb_id, self._sbi_id, workflow_type)
 
-    def wait_loop(self):
-        for txn in self._config.txn():
-            state = txn.get_processing_block_state(self._pb_id)
-            pb_status = state.get('status')
-            if pb_status in ['FINISHED', 'CANCELLED']:
-                if pb_status is 'CANCELLED':
-                    raise Exception('PB is {}'.format(pb_status))
-
-            if not txn.is_processing_block_owner(self._pb_id):
-                raise Exception("Lost ownership of the processing block")
-            yield txn
-
     def exit(self):
         """Close connection to config DB."""
 
@@ -467,9 +455,8 @@ class DaskDeploy:
         LOG.info("Connected to Dask")
 
         # Doing some silly calculation
-        func(*f_args)
-        # results = func(*f_args)
-        # client.compute(results)
+        result = func(*f_args)
+        client.compute(result)
 
         self._deploy_flag = True
 
@@ -483,11 +470,21 @@ class DaskDeploy:
             deploy = txn.get_deployment(self._deploy_id)
             txn.delete_deployment(deploy)
 
-    def is_finished(self, txn):
+    def is_finished(self):
         """Checking if the deployment is finished."""
-        # for txn in self._config.txn():
-        if self._deploy_flag:
-            self.remove()
-            return True
+        for txn in self._config.txn():
+            LOG.info("Checking PB state.")
+            state = txn.get_processing_block_state(self._pb_id)
+            pb_status = state.get('status')
+            if pb_status in ['FINISHED', 'CANCELLED']:
+                if pb_status is 'CANCELLED':
+                    self.remove()
+                    raise Exception('PB is {}'.format(pb_status))
 
-        txn.loop(wait=True)
+            if not txn.is_processing_block_owner(self._pb_id):
+                self.remove()
+                raise Exception("Lost ownership of the processing block")
+
+            if self._deploy_flag:
+                self.remove()
+                return True
