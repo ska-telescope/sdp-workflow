@@ -532,8 +532,8 @@ class DaskDeploy:
 
         # Doing some silly calculation
         result = func(*f_args)
-        r = result.compute()
-        LOG.info("Computed Result, {}".format(r))
+        # r = result.compute()
+        LOG.info("Computed Result, {}".format(result))
 
         self._deploy_flag = True
 
