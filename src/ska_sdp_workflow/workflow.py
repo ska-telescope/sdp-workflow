@@ -434,6 +434,10 @@ class HelmDeploy:
             func(*f_args)
             LOG.info("Processing Done")
 
+    def get_id(self):
+        """Get deployment id"""
+        return self._deploy_id
+
     def remove(self, deploy_id=None):
         """Remove Execution Engine.
 
