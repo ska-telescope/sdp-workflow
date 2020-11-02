@@ -9,8 +9,8 @@ workflow:
     - if: $CI_COMMIT_BRANCH
 
 stages:
-#  - test
-#  - lint
+  - test
+  - lint
   - build
   - publish
 
@@ -20,39 +20,39 @@ image: python:latest
 # Test and lint Python package
 # ============================================================================
 
-#test:
-#  stage: test
-#  image: nexus.engageska-portugal.pt/ska-docker/ska-python-buildenv:latest
-#  before_script:
-#    - pip3 install -r requirements.txt -r requirements-test.txt
-#  script:
-#    - python3 setup.py test
-##  after_script:
-##    - mkdir -p build/reports
-##    - mv code-coverage.xml unit-tests.xml build/reports
-#  artifacts:
-#    paths:
-#      - build
-#    expire_in: 1 week
-#    when: always
+test:
+  stage: test
+  image: nexus.engageska-portugal.pt/ska-docker/ska-python-buildenv:latest
+  before_script:
+    - pip3 install -r requirements.txt -r requirements-test.txt
+  script:
+    - python3 setup.py test
+  after_script:
+    - mkdir -p build/reports
+    - mv code-coverage.xml unit-tests.xml build/reports
+  artifacts:
+    paths:
+      - build
+    expire_in: 1 week
+    when: always
 
-#lint:
-#  stage: lint
-#  dependencies:
-#    - test
-#  before_script:
-#    - pip3 install -r requirements.txt -r requirements-test.txt
-#  script:
-#    - pylint --exit-zero --output-format=parseable src/ska_sdp_workflow
-#    - pylint --exit-zero --output-format=pylint2junit.JunitReporter src/ska_sdp_workflow > linting.xml
-#  after_script:
-#    - mkdir -p build/reports
-#    - mv linting.xml build/reports
-#  artifacts:
-#    paths:
-#      - build
-#    expire_in: 1 week
-#    when: always
+lint:
+  stage: lint
+  dependencies:
+    - test
+  before_script:
+    - pip3 install -r requirements.txt -r requirements-test.txt
+  script:
+    - pylint --exit-zero --output-format=parseable src/ska_sdp_workflow
+    - pylint --exit-zero --output-format=pylint2junit.JunitReporter src/ska_sdp_workflow > linting.xml
+  after_script:
+    - mkdir -p build/reports
+    - mv linting.xml build/reports
+  artifacts:
+    paths:
+      - build
+    expire_in: 1 week
+    when: always
 
 # ============================================================================
 # Build Python package

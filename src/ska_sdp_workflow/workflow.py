@@ -1,15 +1,20 @@
 """High-level API for SKA SDP workflow."""
 # pylint: disable=invalid-name
 # pylint: disable=too-few-public-methods
+# pylint: disable=too-many-arguments
+# pylint: disable=too-many-instance-attributes
+# pylint: disable=broad-except
+# pylint: disable=no-self-use
 
 import logging
 import sys
+import os
 import threading
 # import ska.logging
 import ska_sdp_config
-import os
 import distributed
 
+# Initialise logging
 # ska.logging.configure_logging()
 LOG = logging.getLogger('workflow')
 LOG.setLevel(logging.DEBUG)
@@ -184,7 +189,7 @@ class BufferRequest:
         :param size: size of the buffer
         :param tags: type of the buffer
         """
-        LOG.info("Buffer Requested")
+        LOG.info("For %s Buffer Requested size - %s", tags, size)
 
 
 # -------------------------------------
@@ -286,8 +291,10 @@ class Phase:
             self._deploy = HelmDeploy(self._pb_id, self._config, deploy_name)
             deploy_id = self._deploy.get_id()
             self._deploy_id_list.append(deploy_id)
-        else:
-            return HelmDeploy(self._pb_id, self._config, func=func, f_args=f_args)
+            return None
+
+        return HelmDeploy(self._pb_id, self._config, func=func, f_args=f_args)
+
 
     def ee_deploy_dask(self, name, func, f_args):
         """Deploy Dask and return a handle.
@@ -308,7 +315,7 @@ class Phase:
         sbi = txn.get_scheduling_block(self._sbi_id)
         status = sbi.get('status')
         if status in ['FINISHED', 'CANCELLED']:
-            if status is 'CANCELLED':
+            if status == 'CANCELLED':
                 raise Exception('SBI is {}'.format(status))
             self._status = status
             finished = True
@@ -347,7 +354,7 @@ class Phase:
             pb_status = pb_state.get('status')
             if pb_status in ['FINISHED', 'CANCELLED']:
                 LOG.info("Processing Block is %s", pb_status)
-                if pb_status is 'CANCELLED':
+                if pb_status == 'CANCELLED':
                     raise Exception('PB is {}'.format(pb_status))
                 break
 
@@ -419,7 +426,7 @@ class HelmDeploy:
 
         """
         if deploy_name is not None:
-            LOG.info("Deploying {} Workflow...".format(deploy_name))
+            LOG.info("Deploying %s Workflow...", deploy_name)
             chart = {
                 'chart': deploy_name,  # Helm chart deploy from the repo
             }
@@ -458,7 +465,7 @@ class HelmDeploy:
 class DaskDeploy:
     """Deploy Dask Execution Engine"""
     def __init__(self, pb_id, config, deploy_name=None,
-                 func=None, f_args=None,):
+                 func=None, f_args=None):
         """Initialise.
 
         :param pb_id: processing block ID
@@ -524,7 +531,7 @@ class DaskDeploy:
                     self._deploy_id + '-scheduler.' +
                     os.environ['SDP_HELM_NAMESPACE'] + ':8786')
             except Exception as e:
-                print(e)
+                LOG.error(e)
         if client is None:
             LOG.error("Could not connect to Dask!")
             sys.exit(1)
@@ -533,7 +540,7 @@ class DaskDeploy:
         # Doing some silly calculation
         result = func(*f_args)
         # r = result.compute()
-        LOG.info("Computed Result, {}".format(result))
+        LOG.info("Computed Result %s", result)
 
         self._deploy_flag = True
 
@@ -553,7 +560,7 @@ class DaskDeploy:
             state = txn.get_processing_block_state(self._pb_id)
             pb_status = state.get('status')
             if pb_status in ['FINISHED', 'CANCELLED']:
-                if pb_status is 'CANCELLED':
+                if pb_status == 'CANCELLED':
                     self.remove()
                     raise Exception('PB is {}'.format(pb_status))
 
@@ -564,3 +571,4 @@ class DaskDeploy:
             if self._deploy_flag:
                 self.remove()
                 return True
+        return False
