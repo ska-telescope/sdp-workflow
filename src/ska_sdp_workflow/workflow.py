@@ -124,7 +124,16 @@ class ProcessingBlock:
                      self._pb_id, self._sbi_id, workflow_type)
 
     def wait_loop(self):
-        return self._config.txn()
+        for txn in self._config.txn():
+            state = txn.get_processing_block_state(self._pb_id)
+            pb_status = state.get('status')
+            if pb_status in ['FINISHED', 'CANCELLED']:
+                if pb_status is 'CANCELLED':
+                    raise Exception('PB is {}'.format(pb_status))
+
+            if not txn.is_processing_block_owner(self._pb_id):
+                raise Exception("Lost ownership of the processing block")
+            yield txn
 
     def exit(self):
         """Close connection to config DB."""
@@ -459,6 +468,8 @@ class DaskDeploy:
 
         # Doing some silly calculation
         func(*f_args)
+        # results = func(*f_args)
+        # client.compute(results)
 
         self._deploy_flag = True
 
@@ -475,17 +486,6 @@ class DaskDeploy:
     def is_finished(self, txn):
         """Checking if the deployment is finished."""
         # for txn in self._config.txn():
-        state = txn.get_processing_block_state(self._pb_id)
-        pb_status = state.get('status')
-        if pb_status in ['FINISHED', 'CANCELLED']:
-            if pb_status is 'CANCELLED':
-                self.remove()
-                raise Exception('PB is {}'.format(pb_status))
-
-        if not txn.is_processing_block_owner(self._pb_id):
-            self.remove()
-            raise Exception("Lost ownership of the processing block")
-
         if self._deploy_flag:
             self.remove()
             return True
