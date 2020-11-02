@@ -456,8 +456,7 @@ class DaskDeploy:
 
         # Doing some silly calculation
         result = func(*f_args)
-        r = client.compute(result)
-        LOG.info("Results {}".format(r))
+        LOG.info("Computed Result, {}".format(result))
 
         self._deploy_flag = True
 
@@ -474,7 +473,6 @@ class DaskDeploy:
     def is_finished(self):
         """Checking if the deployment is finished."""
         for txn in self._config.txn():
-            LOG.info("Checking PB state.")
             state = txn.get_processing_block_state(self._pb_id)
             pb_status = state.get('status')
             if pb_status in ['FINISHED', 'CANCELLED']:
