@@ -14,6 +14,7 @@ Functionality
 -------------
 
 Starting, monitoring and ending a workflow.
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 - At the start
 
@@ -29,22 +30,53 @@ Starting, monitoring and ending a workflow.
 
 - Create Phase
 
-  -
+  - Declare phases. In the current implementation, only one phase is declared the work phase.
 
 - Start Work Phase
 
-  -
+  - Entering this phase, it checks if the resources are available and waits until it is and internally
+    checks whether the processing block was cancelled. For real-time workflow, it checks if the scheduling
+    block instance was cancelled.
+  - Deploys execution engine
+  - Executes a script/function using the execution engine
+  - Monitors the execution engine and processing block state. Waits until its either finished or cancelled
 
-Monitor scheduling block instance (for real-time workflows)
-A real-time workflow needs to respond to changes in the SBI resulting from commands on the subarray device. Most importantly it needs to know when the SBI has been ended so it can clean up and exit.
-Monitor processing block state
-Workflow should clean up and exit if requested/forced by processing controller.
-At the end
-Release resources.
-Update processing block state with information about the success or failure of the workflow
+- At the end
+
+  - Removes the execution engine
+  - Release resources.
+  - Update processing block state with information about the success or failure of the workflow
 
 Receive workflows
+^^^^^^^^^^^^^^^^^
 
  - Get IP and MAC addresses for the receive processes.
  - Monitor receive processes. If any get restarted, then the addresses may need to be updated.
  - Write the addresses in the appropriate format into the processing block state.
+
+
+Installation
+------------
+
+The library can be installed using pip but need to make to set Nexus as the source for pip:
+
+    .. code-block::
+
+       pip install -i https://nexus.engageska-portugal.pt/repository/pypi/simple ska-telescope-model
+
+To install it through the requirements.txt file, then add the source to the file:
+
+    .. code-block::
+
+      --index-url https://nexus.engageska-portugal.pt/repository/pypi/simple
+      --extra-index-url https://pypi.org/simple
+
+Usage
+-----
+
+Once the SDP workflow library have been installed, use:
+
+    .. code-block::
+
+       from ska_sdp_workflow import ProcessingBlock
+

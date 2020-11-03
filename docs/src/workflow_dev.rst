@@ -14,7 +14,7 @@ The steps to develop and test an SDP workflow as follows:
         $ cd src/workflows/<my-workflow>
 
 - Write the workflow script (``<my-workflow>.py``). See the existing workflows
-  for examples of how to do this. ``test_realtime`` and `test_batch`` workflwos
+  for examples of how to do this. ``test_realtime`` and ``test_batch`` workflows
   would be the best place to start with.
 
 - Create a ``Dockerfile`` for building the workflow image, e.g.
@@ -61,9 +61,10 @@ The steps to develop and test an SDP workflow as follows:
 - You can then test the workflow by starting SDP with the processing
   controller workflows URL pointing to your branch in GitLab:
 
-    .. code-block::
-      $ helm install sdp-prototype -n sdp-prototype \
-        --set processing_controller.workflows.url=https://gitlab.com/ska-telescope/sdp-workflows-procfunc/-/raw/<my-branch>/workflows.json
+  .. code-block::
+
+    $ helm install sdp-prototype -n sdp-prototype \
+    --set processing_controller.workflows.url=https://gitlab.com/ska-telescope/sdp-workflows-procfunc/-/raw/<my-branch>/workflows.json
 
 - Then create a processing block to run the workflow, either via the Tango
   interface, or by creating it directly in the config DB with ``sdpcfg``.

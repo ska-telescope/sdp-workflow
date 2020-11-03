@@ -7,8 +7,10 @@ These are the Tango device servers implemented in the SDP.
   :maxdepth: 1
 
   sdp_workflow
-  testing
+  workflow_dev
   workflow_api
+  example_scripts
+
 
 Indices and tables
 ------------------
