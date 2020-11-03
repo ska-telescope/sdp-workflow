@@ -410,6 +410,7 @@ class HelmDeploy:
         self._pb_id = pb_id
         self._config = config
         self._deploy_id = None
+        self._deploy_flag = False
 
         if deploy_name is not None:
             self.deploy(deploy_name)
@@ -455,6 +456,25 @@ class HelmDeploy:
         for txn in self._config.txn():
             deploy = txn.get_deployment(self._deploy_id)
             txn.delete_deployment(deploy)
+
+    def is_finished(self):
+        """Wait until the deploy is finished. Used for batch workflow."""
+        for txn in self._config.txn():
+            state = txn.get_processing_block_state(self._pb_id)
+            pb_status = state.get('status')
+            if pb_status in ['FINISHED', 'CANCELLED']:
+                if pb_status == 'CANCELLED':
+                    self.remove()
+                    raise Exception('PB is {}'.format(pb_status))
+
+            if not txn.is_processing_block_owner(self._pb_id):
+                self.remove()
+                raise Exception("Lost ownership of the processing block")
+
+            if self._deploy_flag:
+                self.remove()
+                return True
+        return False
 
 # -------------------------------------
 # Dask Deploy Class
