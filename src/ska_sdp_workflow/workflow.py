@@ -53,8 +53,7 @@ class ProcessingBlock:
         self._sbi_id = pb.sbi_id
 
     def receive_addresses(self, scan_types):
-        """Generate receive addresses and update it
-        in the processing block state.
+        """Generate receive addresses and update the processing block state.
 
         :param scan_types: Scan types
         """
@@ -197,13 +196,13 @@ class BufferRequest:
 # -------------------------------------
 
 class Phase:
-    """Connection to the Phase class. """
+    """Phase class.Connection to the declare phases. """
 
     def __init__(self, name, list_reservations, config, pb_id,
                  sbi_id, workflow_type):
         """Initialise
 
-        :param name: name of the pahse
+        :param name: name of the phase
         :param list_reservations: list of reservations
         :param config: config DB
         :param pb_id: processing block ID
@@ -226,8 +225,7 @@ class Phase:
         """Before entering, checks if the pb is cancelled or finished.
         For real-time workflows checks if sbi is cancelled or finished.
 
-        Waits for resources to be available and then creates an event loop
-        for the batch workflow.
+        Waits for resources to be available.
         """
 
         for txn in self._config.txn():
@@ -261,7 +259,8 @@ class Phase:
             txn.update_processing_block_state(self._pb_id, state)
 
     def check_state(self, txn):
-        """Check if the pb is cancelled or sbi is finished or cancelled
+        """Check if the pb is finished or cancelled. For real-time workflows
+        checks if sbi is finished or cancelled.
 
         :param txn: config db transaction
 
@@ -280,7 +279,7 @@ class Phase:
                 raise Exception('PB is {}'.format(sbi_status))
 
     def ee_deploy(self, deploy_name=None, func=None, f_args=None):
-        """Deploy Execution Engine and return handle.
+        """Deploy Helm Execution Engine and returns a handle.
 
         :param deploy_name: deploy name
         :param func: function to process
@@ -295,9 +294,8 @@ class Phase:
 
         return HelmDeploy(self._pb_id, self._config, func=func, f_args=f_args)
 
-
     def ee_deploy_dask(self, name, func, f_args):
-        """Deploy Dask and return a handle.
+        """Deploy Dask Execution Engine and returns a handle.
 
         :param name: deploy name
         :param func: function to process
@@ -371,8 +369,9 @@ class Phase:
         finished or cancelled for real-time workflows and updates processing
         block state.
 
-        For batch-workflow waits until all the deployments are finished and
-        processing block is set to finished."""
+        For batch-workflow updates the processsing block state.
+
+        """
 
         if self._workflow_type == 'realtime':
             # Wait until SBI is marked as FINISHED or CANCELLED
@@ -396,7 +395,7 @@ class Phase:
 
 
 class HelmDeploy:
-    """Helm Deployment."""
+    """Deploy Helm Deploy Execution Engine."""
     def __init__(self, pb_id, config, deploy_name=None,
                  func=None, f_args=None,):
         """Initialise.
@@ -411,6 +410,7 @@ class HelmDeploy:
         self._pb_id = pb_id
         self._config = config
         self._deploy_id = None
+        self._deploy_flag = False
 
         if deploy_name is not None:
             self.deploy(deploy_name)
@@ -456,6 +456,25 @@ class HelmDeploy:
         for txn in self._config.txn():
             deploy = txn.get_deployment(self._deploy_id)
             txn.delete_deployment(deploy)
+
+    def is_finished(self):
+        """Wait until the deploy is finished. Used for batch workflow."""
+        for txn in self._config.txn():
+            state = txn.get_processing_block_state(self._pb_id)
+            pb_status = state.get('status')
+            if pb_status in ['FINISHED', 'CANCELLED']:
+                if pb_status == 'CANCELLED':
+                    self.remove()
+                    raise Exception('PB is {}'.format(pb_status))
+
+            if not txn.is_processing_block_owner(self._pb_id):
+                self.remove()
+                raise Exception("Lost ownership of the processing block")
+
+            if self._deploy_flag:
+                self.remove()
+                return True
+        return False
 
 # -------------------------------------
 # Dask Deploy Class
@@ -555,7 +574,10 @@ class DaskDeploy:
             txn.delete_deployment(deploy)
 
     def is_finished(self):
-        """Checking the pb state check if the deployment is finished."""
+        """Monitors the processing block state and ownership.
+        Also monitors the deploy_flag
+
+        """
         for txn in self._config.txn():
             state = txn.get_processing_block_state(self._pb_id)
             pb_status = state.get('status')
