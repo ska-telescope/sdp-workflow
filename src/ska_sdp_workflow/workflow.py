@@ -10,12 +10,12 @@ import logging
 import sys
 import os
 import threading
-# import ska.logging
+import ska.logging
 import ska_sdp_config
 import distributed
 
 # Initialise logging
-# ska.logging.configure_logging()
+ska.logging.configure_logging()
 LOG = logging.getLogger('workflow')
 LOG.setLevel(logging.DEBUG)
 
@@ -128,6 +128,22 @@ class ProcessingBlock:
         workflow_type = workflow['type']
         return Phase(name, reservation, self._config,
                      self._pb_id, self._sbi_id, workflow_type)
+
+    def wait_loop(self):
+
+        for txn in self._config.txn():
+            state = txn.get_processing_block_state(self._pb_id)
+            pb_status = state.get('status')
+            if pb_status in ['FINISHED', 'CANCELLED']:
+                if pb_status == 'CANCELLED':
+                    # Update deploy status
+                    raise Exception('PB is {}'.format(pb_status))
+
+            if not txn.is_processing_block_owner(self._pb_id):
+                # Update deploy status
+                raise Exception("Lost ownership of the processing block")
+
+            yield txn
 
     def exit(self):
         """Close connection to config DB."""
@@ -249,6 +265,14 @@ class Phase:
                 LOG.info('Resources are available')
                 break
             txn.loop(wait=True)
+
+        # Add deployments key to processing block state
+        for txn in self._config.txn():
+            self.check_state(txn)
+            state = txn.get_processing_block_state(self._pb_id)
+            if 'deployments' not in state:
+                state['deployments'] = {}
+                txn.update_processing_block_state(self._pb_id, state)
 
         # Set state to indicate processing has started
         LOG.info('Setting status to RUNNING')
@@ -431,12 +455,14 @@ class HelmDeploy:
                 'chart': deploy_name,  # Helm chart deploy from the repo
             }
             self._deploy_id = 'proc-{}-{}'.format(self._pb_id, deploy_name)
+
             deploy = ska_sdp_config.Deployment(self._deploy_id,
                                                "helm", chart)
             for txn in self._config.txn():
                 txn.create_deployment(deploy)
         else:
             LOG.info("Pretending to Create deployment.")
+
             # Running function to do some processing
             func(*f_args)
             LOG.info("Processing Done")
@@ -523,6 +549,15 @@ class DaskDeploy:
         # all of that at the moment.
         LOG.info("Deploying Dask...")
         self._deploy_id = 'proc-{}-{}'.format(self._pb_id, deploy_name)
+
+        # Set Deployment to RUNNING status in the config_db
+        for txn in self._config.txn():
+            state = txn.get_processing_block_state(self._pb_id)
+            deployments = state.get('deployments')
+            deployments[self._deploy_id] = 'RUNNING'
+            state['deployments'] = deployments
+            txn.update_processing_block_state(self._pb_id, state)
+
         deploy = ska_sdp_config.Deployment(
             self._deploy_id, "helm", {
                 'chart': 'dask/dask',
@@ -558,39 +593,39 @@ class DaskDeploy:
 
         # Doing some silly calculation
         result = func(*f_args)
-        # r = result.compute()
-        LOG.info("Computed Result %s", result)
+        r = result.compute()
+        LOG.info("Computed Result %s", r)
 
-        self._deploy_flag = True
+        # Update Deployment Status
+        for txn in self._config.txn():
+            state = txn.get_processing_block_state(self._pb_id)
+            deployments = state.get("deployments")
+            deployments[self._deploy_id] = 'FINISHED'
+            state['deployments'] = deployments
+            LOG.info("Deployments UPDATED {}".format(state))
+            txn.update_processing_block_state(self._pb_id, state)
 
     def get_id(self):
         """Get deployment id"""
         return self._deploy_id
 
-    def remove(self):
+    def remove(self, deploy_id):
         """Remove Execution Engine."""
         for txn in self._config.txn():
-            deploy = txn.get_deployment(self._deploy_id)
+            deploy = txn.get_deployment(deploy_id)
             txn.delete_deployment(deploy)
 
-    def is_finished(self):
+    def is_finished(self, txn):
         """Monitors the processing block state and ownership.
         Also monitors the deploy_flag
 
+        :param txn: config transaction
         """
-        for txn in self._config.txn():
-            state = txn.get_processing_block_state(self._pb_id)
-            pb_status = state.get('status')
-            if pb_status in ['FINISHED', 'CANCELLED']:
-                if pb_status == 'CANCELLED':
-                    self.remove()
-                    raise Exception('PB is {}'.format(pb_status))
-
-            if not txn.is_processing_block_owner(self._pb_id):
-                self.remove()
-                raise Exception("Lost ownership of the processing block")
-
-            if self._deploy_flag:
-                self.remove()
+        state = txn.get_processing_block_state(self._pb_id)
+        deployments = state.get("deployments")
+        if self._deploy_id in deployments:
+            if deployments[self._deploy_id] == 'FINISHED':
+                self.remove(self._deploy_id)
                 return True
-        return False
+
+        txn.loop(wait=True)
