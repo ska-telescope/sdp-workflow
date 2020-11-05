@@ -5,6 +5,7 @@
 # pylint: disable=too-many-instance-attributes
 # pylint: disable=broad-except
 # pylint: disable=no-self-use
+# pylint: disable=inconsistent-return-statements
 
 import logging
 import sys
@@ -130,17 +131,15 @@ class ProcessingBlock:
                      self._pb_id, self._sbi_id, workflow_type)
 
     def wait_loop(self):
-
+        """Wait loop to check the status of the processing block."""
         for txn in self._config.txn():
             state = txn.get_processing_block_state(self._pb_id)
             pb_status = state.get('status')
             if pb_status in ['FINISHED', 'CANCELLED']:
                 if pb_status == 'CANCELLED':
-                    # Update deploy status
                     raise Exception('PB is {}'.format(pb_status))
 
             if not txn.is_processing_block_owner(self._pb_id):
-                # Update deploy status
                 raise Exception("Lost ownership of the processing block")
 
             yield txn
@@ -235,7 +234,7 @@ class Phase:
         self._deploy_id_list = []
         self._deploy = None
         self._status = None
-        self._q = None
+        self._deployment_status = None
 
     def __enter__(self):
         """Before entering, checks if the pb is cancelled or finished.
@@ -310,13 +309,14 @@ class Phase:
         :param f_args: function arguments
 
         """
-        if deploy_name is not None:
-            self._deploy = HelmDeploy(self._pb_id, self._config, deploy_name)
-            deploy_id = self._deploy.get_id()
-            self._deploy_id_list.append(deploy_id)
-            return None
 
-        return HelmDeploy(self._pb_id, self._config, func=func, f_args=f_args)
+        if deploy_name == 'test_batch':
+            return HelmDeploy(self._pb_id, self._config, deploy_name,
+                              func=func, f_args=f_args)
+        self._deploy = HelmDeploy(self._pb_id, self._config, deploy_name)
+        deploy_id = self._deploy.get_id()
+        self._deploy_id_list.append(deploy_id)
+        return None
 
     def ee_deploy_dask(self, name, func, f_args):
         """Deploy Dask Execution Engine and returns a handle.
@@ -327,6 +327,17 @@ class Phase:
 
         """
         return DaskDeploy(self._pb_id, self._config, name, func, f_args)
+
+    def ee_remove(self):
+        """Remove Execution Engine."""
+        for txn in self._config.txn():
+            state = txn.get_processing_block_state(self._pb_id)
+            deployments = state.get("deployments")
+            for deploy_id in self._deploy_id_list:
+                if deployments[deploy_id] == 'FINISHED':
+                    deployment_list = txn.list_deployments()
+                    if deploy_id in deployment_list:
+                        self._deploy.remove(deploy_id)
 
     def is_sbi_finished(self, txn):
         """Checks if the sbi are finished or cancelled.
@@ -378,12 +389,13 @@ class Phase:
                 LOG.info("Processing Block is %s", pb_status)
                 if pb_status == 'CANCELLED':
                     raise Exception('PB is {}'.format(pb_status))
-                break
 
             if not txn.is_processing_block_owner(self._pb_id):
                 raise Exception("Lost ownership of the processing block")
 
             if self.is_sbi_finished(txn):
+                if self._deploy_id_list:
+                    self._deploy.update_deploy_status('FINISHED')
                 break
 
             txn.loop(wait=True)
@@ -393,7 +405,7 @@ class Phase:
         finished or cancelled for real-time workflows and updates processing
         block state.
 
-        For batch-workflow updates the processsing block state.
+        For batch-workflow updates the processing block state.
 
         """
 
@@ -404,21 +416,72 @@ class Phase:
             # Clean up deployment.
             LOG.info("Clean up deployment")
             if self._deploy_id_list:
-                for deploy_id in self._deploy_id_list:
-                    self._deploy.remove(deploy_id)
-                self.update_pb_state()
-            else:
-                # This is for test_realtime workflow
-                self.update_pb_state()
+                self.ee_remove()
+            self.update_pb_state()
         else:
             self.update_pb_state()
+
+        LOG.info("Deployments All Done")
+
+
+# -------------------------------------
+# Parent Deploy Class
+# -------------------------------------
+
+class Deploy:
+    """Parent Class for Deployments."""
+    def __init__(self, pb_id, config):
+        """Initialise.
+
+        :param pb_id: processing block ID
+        :param config: config DB
+        """
+
+        self._pb_id = pb_id
+        self._config = config
+        self._deploy_id = None
+
+    def update_deploy_status(self, status):
+        """Update Deployment Status"""
+        for txn in self._config.txn():
+            state = txn.get_processing_block_state(self._pb_id)
+            deployments = state.get("deployments")
+            deployments[self._deploy_id] = status
+            state['deployments'] = deployments
+            txn.update_processing_block_state(self._pb_id, state)
+
+    def get_id(self):
+        """Get deployment id"""
+        return self._deploy_id
+
+    def remove(self, deploy_id):
+        """Remove Execution Engine."""
+        for txn in self._config.txn():
+            deploy = txn.get_deployment(deploy_id)
+            txn.delete_deployment(deploy)
+
+    def is_finished(self, txn):
+        """Checks if the deployments have finished.
+
+        :param txn: config transaction
+        """
+        state = txn.get_processing_block_state(self._pb_id)
+        deployments = state.get("deployments")
+        if self._deploy_id in deployments:
+            if deployments[self._deploy_id] == 'FINISHED':
+                deployment_lists = txn.list_deployments()
+                if self._deploy_id in deployment_lists:
+                    self.remove(self._deploy_id)
+                return True
+
+        txn.loop(wait=True)
 
 # -------------------------------------
 # Helm Deploy Class
 # -------------------------------------
 
 
-class HelmDeploy:
+class HelmDeploy(Deploy):
     """Deploy Helm Deploy Execution Engine."""
     def __init__(self, pb_id, config, deploy_name=None,
                  func=None, f_args=None,):
@@ -431,18 +494,16 @@ class HelmDeploy:
         :param f_args: function arguments
 
         """
-        self._pb_id = pb_id
-        self._config = config
-        self._deploy_id = None
+        super().__init__(pb_id, config)
         self._deploy_flag = False
 
-        if deploy_name is not None:
+        if deploy_name == 'test_realtime':
             self.deploy(deploy_name)
         else:
-            self.deploy(func=func, f_args=f_args)
+            self.deploy(deploy_name, func, f_args)
 
-    def deploy(self, deploy_name=None, func=None, f_args=None):
-        """Deploy Helm.
+    def deploy(self, deploy_name, func=None, f_args=None):
+        """Helm Deploy.
 
         :param deploy_name: deployment name
         :param func: function to process
@@ -451,64 +512,32 @@ class HelmDeploy:
         """
         if deploy_name is not None:
             LOG.info("Deploying %s Workflow...", deploy_name)
-            chart = {
-                'chart': deploy_name,  # Helm chart deploy from the repo
-            }
             self._deploy_id = 'proc-{}-{}'.format(self._pb_id, deploy_name)
+            self.update_deploy_status('RUNNING')
 
-            deploy = ska_sdp_config.Deployment(self._deploy_id,
-                                               "helm", chart)
-            for txn in self._config.txn():
-                txn.create_deployment(deploy)
-        else:
-            LOG.info("Pretending to Create deployment.")
-
-            # Running function to do some processing
-            func(*f_args)
-            LOG.info("Processing Done")
-
-    def get_id(self):
-        """Get deployment id"""
-        return self._deploy_id
-
-    def remove(self, deploy_id=None):
-        """Remove Execution Engine.
-
-        :param deploy_id: Deployment ID
-
-        """
-        if deploy_id is not None:
-            self._deploy_id = deploy_id
-        for txn in self._config.txn():
-            deploy = txn.get_deployment(self._deploy_id)
-            txn.delete_deployment(deploy)
-
-    def is_finished(self):
-        """Wait until the deploy is finished. Used for batch workflow."""
-        for txn in self._config.txn():
-            state = txn.get_processing_block_state(self._pb_id)
-            pb_status = state.get('status')
-            if pb_status in ['FINISHED', 'CANCELLED']:
-                if pb_status == 'CANCELLED':
-                    self.remove()
-                    raise Exception('PB is {}'.format(pb_status))
-
-            if not txn.is_processing_block_owner(self._pb_id):
-                self.remove()
-                raise Exception("Lost ownership of the processing block")
-
-            if self._deploy_flag:
-                self.remove()
-                return True
-        return False
+            if deploy_name == 'test_batch':
+                LOG.info("Starting processing for %fs", *f_args)
+                func(*f_args)
+                LOG.info('Finished processing')
+                self.update_deploy_status('FINISHED')
+            elif deploy_name == 'test_realtime':
+                LOG.info("Pretending to deploy execution engine.")
+            else:
+                chart = {
+                    'chart': deploy_name,  # Helm chart deploy from the repo
+                }
+                deploy = ska_sdp_config.Deployment(self._deploy_id,
+                                                   "helm", chart)
+                for txn in self._config.txn():
+                    txn.create_deployment(deploy)
 
 # -------------------------------------
 # Dask Deploy Class
 # -------------------------------------
 
 
-class DaskDeploy:
-    """Deploy Dask Execution Engine"""
+class DaskDeploy(Deploy):
+    """Deploy Dask Execution Engine."""
     def __init__(self, pb_id, config, deploy_name=None,
                  func=None, f_args=None):
         """Initialise.
@@ -520,12 +549,7 @@ class DaskDeploy:
         :param f_args: function arguments
 
         """
-
-        self._pb_id = pb_id
-        self._config = config
-        self._deploy_id = None
-        self._deploy_flag = False
-
+        super().__init__(pb_id, config)
         x = threading.Thread(target=self.deploy_dask,
                              args=(deploy_name, func, f_args))
         x.setDaemon(True)
@@ -551,12 +575,7 @@ class DaskDeploy:
         self._deploy_id = 'proc-{}-{}'.format(self._pb_id, deploy_name)
 
         # Set Deployment to RUNNING status in the config_db
-        for txn in self._config.txn():
-            state = txn.get_processing_block_state(self._pb_id)
-            deployments = state.get('deployments')
-            deployments[self._deploy_id] = 'RUNNING'
-            state['deployments'] = deployments
-            txn.update_processing_block_state(self._pb_id, state)
+        self.update_deploy_status('RUNNING')
 
         deploy = ska_sdp_config.Deployment(
             self._deploy_id, "helm", {
@@ -597,35 +616,4 @@ class DaskDeploy:
         LOG.info("Computed Result %s", r)
 
         # Update Deployment Status
-        for txn in self._config.txn():
-            state = txn.get_processing_block_state(self._pb_id)
-            deployments = state.get("deployments")
-            deployments[self._deploy_id] = 'FINISHED'
-            state['deployments'] = deployments
-            LOG.info("Deployments UPDATED {}".format(state))
-            txn.update_processing_block_state(self._pb_id, state)
-
-    def get_id(self):
-        """Get deployment id"""
-        return self._deploy_id
-
-    def remove(self, deploy_id):
-        """Remove Execution Engine."""
-        for txn in self._config.txn():
-            deploy = txn.get_deployment(deploy_id)
-            txn.delete_deployment(deploy)
-
-    def is_finished(self, txn):
-        """Monitors the processing block state and ownership.
-        Also monitors the deploy_flag
-
-        :param txn: config transaction
-        """
-        state = txn.get_processing_block_state(self._pb_id)
-        deployments = state.get("deployments")
-        if self._deploy_id in deployments:
-            if deployments[self._deploy_id] == 'FINISHED':
-                self.remove(self._deploy_id)
-                return True
-
-        txn.loop(wait=True)
+        self.update_deploy_status('FINISHED')
