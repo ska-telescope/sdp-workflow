@@ -1,3 +1,2 @@
 distributed==2.30.0
 ska-sdp-config>=0.0.11
-ska-logging
