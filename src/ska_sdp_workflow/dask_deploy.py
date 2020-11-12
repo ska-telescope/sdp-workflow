@@ -31,8 +31,8 @@ class DaskDeploy(Deploy):
         """
         super().__init__(pb_id, config)
         thread = threading.Thread(target=self.deploy_dask,
-                                  args=(deploy_name, n_workers, func, f_args,))
-        thread.setDaemon(True)
+                                  args=(deploy_name, n_workers, func, f_args,),
+                                  daemon=True)
         thread.start()
 
     def deploy_dask(self, deploy_name, n_workers, func, f_args):
@@ -44,14 +44,6 @@ class DaskDeploy(Deploy):
         :param n_workers: number of dask workers
 
         """
-        # Deploy Dask with 2 workers.
-        # This is done by adding the request to the configuration database,
-        # where it will be picked up and executed by appropriate
-        # controllers. In the full system this will involve external checks
-        # for whether the workflow actually has been assigned enough resources
-        # to do this - and for obtaining such assignments the workflow would
-        # need to communicate with a scheduler process. But we are ignoring
-        # all of that at the moment.
         LOG.info("Deploying Dask...")
         self._deploy_id = 'proc-{}-{}'.format(self._pb_id, deploy_name)
 
@@ -71,11 +63,6 @@ class DaskDeploy(Deploy):
         for txn in self._config.txn():
             txn.create_deployment(deploy)
 
-        # Wait for Dask to become available. At some point there will be a
-        # way to learn about availability from the configuration database
-        # (clearly populated by controllers querying Helm/Kubernetes).  So
-        # for the moment we'll simply query the DNS name where we know
-        # that Dask must become available eventually
         LOG.info("Waiting for Dask...")
         client = None
 

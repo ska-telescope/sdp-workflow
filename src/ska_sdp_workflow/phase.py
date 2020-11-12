@@ -15,12 +15,12 @@ LOG = logging.getLogger('ska_sdp_workflow')
 class Phase:
     """Phase class.Connection to the declare phases. """
 
-    def __init__(self, name, list_reservations, config, pb_id,
+    def __init__(self, name, list_requests, config, pb_id,
                  sbi_id, workflow_type):
         """Initialise
 
         :param name: name of the phase
-        :param list_reservations: list of reservations
+        :param list_requests: list of requests
         :param config: config DB
         :param pb_id: processing block ID
         :param sbi_id: scheduling block instance ID
@@ -28,7 +28,7 @@ class Phase:
 
         """
         self._name = name
-        self._reservations = list_reservations
+        self._requests = list_requests
         self._config = config
         self._pb_id = pb_id
         self._sbi_id = sbi_id
@@ -117,7 +117,7 @@ class Phase:
         return TestDeploy(self._pb_id, self._config, deploy_name,
                           func=func, f_args=f_args)
 
-    def ee_deploy(self, deploy_name):
+    def ee_deploy_helm(self, deploy_name):
         """Deploy Helm Execution Engine.
 
         :param deploy_name: deploy name

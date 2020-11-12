@@ -2,13 +2,15 @@
 # -*- coding: utf-8 -*-
 """PIP setup script for the SDP workflow package."""
 
+import os
 import setuptools
 
 with open("README.md", "r") as fh:
     LONG_DESCRIPTION = fh.read()
 
 version = {}
-with open('src/ska_sdp_workflow/version.py', 'r') as file:
+VERSION_PATH = os.path.join('src', 'ska_sdp_workflow', 'version.py')
+with open(VERSION_PATH, 'r') as file:
     exec(file.read(), version)
 
 setuptools.setup(
@@ -20,11 +22,8 @@ setuptools.setup(
     long_description=LONG_DESCRIPTION,
     long_description_content_type='text/markdown',
     url='https://gitlab.com/ska-telescope/sdp-workflow',
-    # packages=setuptools.find_packages(),
+    packages=setuptools.find_packages(),
     package_dir={"": "src"},
-    packages=setuptools.find_namespace_packages(where="src"),
-    # Workaround: avoid declaring pytango dependency.
-    # It's ok to fail to load if not there.
     install_requires=[
         'ska_logging >= 0.3',
         'ska-sdp-config>=0.0.11',

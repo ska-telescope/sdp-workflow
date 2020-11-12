@@ -110,19 +110,19 @@ class ProcessingBlock:
 
         return BufferRequest(size, tags)
 
-    def create_phase(self, name, reservation):
+    def create_phase(self, name, requests):
         """Create a :class:`Phase` for deploying and
         monitoring execution engines.
 
         :param name: name of the phase getting created
-        :param reservation: list of buffer reservations
+        :param requests: list of buffer requests
 
         :returns: handle to the Phase class
 
         """
         workflow = self._pb.workflow
         workflow_type = workflow['type']
-        return Phase(name, reservation, self._config,
+        return Phase(name, requests, self._config,
                            self._pb_id, self._sbi_id, workflow_type)
 
     def exit(self):
