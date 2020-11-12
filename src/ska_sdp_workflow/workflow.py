@@ -123,7 +123,7 @@ class ProcessingBlock:
         workflow = self._pb.workflow
         workflow_type = workflow['type']
         return Phase(name, requests, self._config,
-                           self._pb_id, self._sbi_id, workflow_type)
+                     self._pb_id, self._sbi_id, workflow_type)
 
     def exit(self):
         """Close connection to config DB."""

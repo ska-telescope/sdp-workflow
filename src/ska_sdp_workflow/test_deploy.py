@@ -4,12 +4,12 @@
 import logging
 import threading
 
-from .deploy_base import Deploy
+from .deploy_base import EEDeploy
 
 LOG = logging.getLogger('ska_sdp_workflow')
 
 
-class TestDeploy(Deploy):
+class TestDeploy(EEDeploy):
     """Deploy a Fake Execution Engine."""
     def __init__(self, pb_id, config, deploy_name,
                  func=None, f_args=None,):

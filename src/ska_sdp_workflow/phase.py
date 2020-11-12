@@ -1,7 +1,6 @@
 """Phase class module for SDP workflow."""
 # pylint: disable=too-many-instance-attributes
 # pylint: disable=too-many-arguments
-# pylint: disable=inconsistent-return-statements
 
 import logging
 
@@ -117,13 +116,16 @@ class Phase:
         return TestDeploy(self._pb_id, self._config, deploy_name,
                           func=func, f_args=f_args)
 
-    def ee_deploy_helm(self, deploy_name):
+    def ee_deploy_helm(self, deploy_name, values=None):
         """Deploy Helm Execution Engine.
 
         :param deploy_name: deploy name
+        :param values: optional dict of values
 
         """
-        self._deploy = HelmDeploy(self._pb_id, self._config, deploy_name)
+
+        self._deploy = HelmDeploy(self._pb_id, self._config,
+                                  deploy_name, values)
         deploy_id = self._deploy.get_id()
         self._deploy_id_list.append(deploy_id)
 
@@ -159,12 +161,13 @@ class Phase:
         sbi = txn.get_scheduling_block(self._sbi_id)
         status = sbi.get('status')
         if status in ['FINISHED', 'CANCELLED']:
+            self._status = status
             if status == 'CANCELLED':
                 raise Exception('SBI is {}'.format(status))
-            self._status = status
+            if self._deploy_id_list:
+                self._deploy.update_deploy_status(status)
             return True
-
-        txn.loop(wait=True)
+        return False
 
     def update_pb_state(self, status=None):
         """Update Processing Block State.
@@ -208,19 +211,12 @@ class Phase:
         """
 
         if self._workflow_type == 'realtime':
-            # Wait until SBI is marked as FINISHED or CANCELLED
-            for txn in self.wait_loop():
-                if self.is_sbi_finished(txn):
-                    if self._deploy_id_list:
-                        self._deploy.update_deploy_status('FINISHED')
-                    break
 
             # Clean up deployment.
             LOG.info("Clean up deployment")
             if self._deploy_id_list:
                 self.ee_remove()
-            self.update_pb_state()
-        else:
-            self.update_pb_state()
+
+        self.update_pb_state()
 
         LOG.info("Deployments All Done")

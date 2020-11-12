@@ -10,12 +10,12 @@ import threading
 import distributed
 import ska_sdp_config
 
-from .deploy_base import Deploy
+from .deploy_base import EEDeploy
 
 LOG = logging.getLogger('ska_sdp_workflow')
 
 
-class DaskDeploy(Deploy):
+class DaskDeploy(EEDeploy):
     """Deploy Dask Execution Engine."""
     def __init__(self, pb_id, config, deploy_name, n_workers,
                  func, f_args):
@@ -58,8 +58,11 @@ class DaskDeploy(Deploy):
                     'jupyter.rbac': 'false',
                     'worker.replicas': n_workers,
                     # We want to access Dask in-cluster using a DNS name
-                    'scheduler.serviceType': 'ClusterIP'
+                    'scheduler.serviceType': 'ClusterIP',
+                    'worker.image.tag': distributed.__version__,
+                    'scheduler.image.tag': distributed.__version__
                 }})
+
         for txn in self._config.txn():
             txn.create_deployment(deploy)
 
@@ -78,7 +81,7 @@ class DaskDeploy(Deploy):
             sys.exit(1)
         LOG.info("Connected to Dask")
 
-        # Doing some silly calculation
+        # Computing result
         result = func(*f_args)
         compute_result = result.compute()
         LOG.info("Computed Result %s", compute_result)

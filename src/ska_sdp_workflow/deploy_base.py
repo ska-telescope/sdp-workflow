@@ -1,8 +1,7 @@
 """Deploy base class module for SDP Workflow."""
-# pylint: disable=inconsistent-return-statements
 
 
-class Deploy:
+class EEDeploy:
     """Parent Class for Deployments."""
     def __init__(self, pb_id, config):
         """Initialise.
@@ -47,5 +46,4 @@ class Deploy:
                 if self._deploy_id in deployment_lists:
                     self.remove(self._deploy_id)
                 return True
-
-        txn.loop(wait=True)
+        return False

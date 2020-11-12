@@ -22,8 +22,8 @@ setuptools.setup(
     long_description=LONG_DESCRIPTION,
     long_description_content_type='text/markdown',
     url='https://gitlab.com/ska-telescope/sdp-workflow',
-    packages=setuptools.find_packages(),
     package_dir={"": "src"},
+    packages=setuptools.find_packages('src'),
     install_requires=[
         'ska_logging >= 0.3',
         'ska-sdp-config>=0.0.11',

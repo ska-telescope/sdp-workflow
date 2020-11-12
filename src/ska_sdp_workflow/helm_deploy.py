@@ -3,14 +3,14 @@
 import logging
 import ska_sdp_config
 
-from .deploy_base import Deploy
+from .deploy_base import EEDeploy
 
 LOG = logging.getLogger('ska_sdp_workflow')
 
 
-class HelmDeploy(Deploy):
+class HelmDeploy(EEDeploy):
     """Deploy Helm Deploy Execution Engine."""
-    def __init__(self, pb_id, config, deploy_name=None):
+    def __init__(self, pb_id, config, deploy_name=None, values=None):
         """Initialise.
 
         :param pb_id: processing block ID
@@ -19,14 +19,14 @@ class HelmDeploy(Deploy):
 
         """
         super().__init__(pb_id, config)
-        self._deploy_flag = False
 
-        self.deploy(deploy_name)
+        self.deploy(deploy_name, values)
 
-    def deploy(self, deploy_name):
+    def deploy(self, deploy_name, values=None):
         """Helm Deploy.
 
         :param deploy_name: deployment name
+        :param values: optional dict of values
 
         """
         LOG.info("Deploying %s Workflow...", deploy_name)
@@ -36,6 +36,10 @@ class HelmDeploy(Deploy):
         chart = {
             'chart': deploy_name,  # Helm chart deploy from the repo
         }
+
+        if values is not None:
+            chart['values'] = values
+
         deploy = ska_sdp_config.Deployment(self._deploy_id,
                                            "helm", chart)
         for txn in self._config.txn():
