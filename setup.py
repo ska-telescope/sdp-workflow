@@ -2,22 +2,21 @@
 # -*- coding: utf-8 -*-
 """PIP setup script for the SDP workflow package."""
 
-import os
 import setuptools
-
-RELEASE_INFO = {}
-RELEASE_PATH = os.path.join('src', 'ska_sdp_workflow', 'release.py')
-exec(open(RELEASE_PATH).read(), RELEASE_INFO)
 
 with open("README.md", "r") as fh:
     LONG_DESCRIPTION = fh.read()
 
+version = {}
+with open('src/ska_sdp_workflow/version.py', 'r') as file:
+    exec(file.read(), version)
+
 setuptools.setup(
-    name=RELEASE_INFO['NAME'],
-    version=RELEASE_INFO['VERSION'],
+    name='ska-sdp-workflow',
+    version=version['__version__'],
     description='SKA SDP Workflow',
-    author=RELEASE_INFO['AUTHOR'],
-    license=RELEASE_INFO['LICENSE'],
+    author='Sim Team',
+    license='License :: OSI Approved :: BSD License',
     long_description=LONG_DESCRIPTION,
     long_description_content_type='text/markdown',
     url='https://gitlab.com/ska-telescope/sdp-workflow',
@@ -29,7 +28,6 @@ setuptools.setup(
     install_requires=[
         'ska_logging >= 0.3',
         'ska-sdp-config>=0.0.11',
-        # 'ska-sdp-logging>=0.0.6',
         'distributed==2.30.0'
     ],
     setup_requires=['pytest-runner'],
