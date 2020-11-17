@@ -9,11 +9,22 @@ import ska_sdp_config
 
 from .phase import Phase
 from .buffer_request import BufferRequest
+from .feature_toggle import FeatureToggle
+
+FEATURE_CONFIG_DB = FeatureToggle('config_db', True)
 
 # Initialise logging
 ska.logging.configure_logging()
 LOG = logging.getLogger('ska_sdp_workflow')
 LOG.setLevel(logging.DEBUG)
+
+
+def new_config_db():
+    """Return a config DB object (factory function)."""
+    backend = 'etcd3' if FEATURE_CONFIG_DB.is_active() else 'memory'
+    LOG.info("Using config DB %s backend", backend)
+    config_db = ska_sdp_config.Config(backend=backend)
+    return config_db
 
 
 class ProcessingBlock:
@@ -27,7 +38,8 @@ class ProcessingBlock:
 
         # Get connection to config DB
         LOG.info('Opening connection to config DB')
-        self._config = ska_sdp_config.Config()
+        self._config = new_config_db()
+        # self._config = ska_sdp_config.Config()
 
         # Processing block ID
         if pb_id is None:

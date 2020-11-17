@@ -1,161 +1,243 @@
-"""SDP Workflow tests."""
+"""SDP Workflow library tests."""
 
 # pylint: disable=redefined-outer-name
 # pylint: disable=duplicate-code
 
-import logging
-from unittest.mock import patch
-
+import os
+import json
 import ska_sdp_config
 import logging
-from ska_sdp_workflow import workflow
 
-# LOG = logging.getLogger(__name__)
+from ska_sdp_workflow import workflow
 
 LOG = logging.getLogger('worklow-test')
 LOG.setLevel(logging.DEBUG)
 
-PREFIX = "/__test_pb"
-
-WORKFLOW = {
-    'type': 'realtime',
-    'id': 'test_rt_workflow',
-    'version': '0.0.1'
-}
+CONFIG_DB_CLIENT = workflow.new_config_db()
+SUBARRAY_ID = '01'
 
 
-def wipe_db(config):
-    config.backend.delete('/pb', must_exist=False, recursive=True)
+def test_claim_processing_block():
+    """Test Claiming processing block"""
+
+    # Wipe the config DB
+    wipe_config_db()
+
+    # Create sbi and pb
+    create_sbi_pbi()
+
+    for txn in CONFIG_DB_CLIENT.txn():
+        pb_list = txn.list_processing_blocks()
+        for pb_id in pb_list:
+            assert txn.get_processing_block(pb_id).id == pb_id
+            workflow.ProcessingBlock(pb_id)
+            assert txn.is_processing_block_owner(pb_id)
 
 
-def test_placeholder():
-    pass
+def test_buffer_request():
+    """Test requesting input and output buffer."""
 
-# def test_claim_processing_block():
-#     """Test Claiming processing block"""
-#
-#     config = ska_sdp_config.Config()
-#     wipe_db(config)
-#
-#     for txn in config.txn():
-#         pb1_id = txn.new_processing_block_id('test')
-#         pb1 = ska_sdp_config.ProcessingBlock(
-#             pb1_id,
-#             sbi_id='sbi-test',
-#             parameters={},
-#             dependencies=[],
-#             workflow=WORKFLOW)
-#
-#         assert txn.get_processing_block(pb1_id) is None
-#         txn.create_processing_block(pb1)
-#         assert txn.get_processing_block(pb1_id).id == pb1_id
-#
-#     pb = workflow.ProcessingBlock(pb1_id)
-#
-#     # Need to sort this out
-#     for txn in config.txn():
-#         assert txn.get_processing_block_owner(pb1_id) == config.owner
-#         assert txn.is_processing_block_owner(pb1_id)
-#
-#
-# def test_input_buffer_request():
-#     """Test requesting input uffer."""
-#
-#     config = ska_sdp_config.Config()
-#     wipe_db(config)
-#
-#     for txn in config.txn():
-#         pb1_id = txn.new_processing_block_id('test')
-#         pb1 = ska_sdp_config.ProcessingBlock(
-#             pb1_id,
-#             sbi_id='sbi-test',
-#             parameters={},
-#             dependencies=[],
-#             workflow=WORKFLOW)
-#
-#         txn.create_processing_block(pb1)
-#
-#     pb = workflow.ProcessingBlock(pb1_id)
-#     in_buffer_res = pb.request_buffer(100e6, tags=['sdm'])
-#     assert in_buffer_res is not None
-#
-#
-# def test_output_buffer_request():
-#     """Test requesting output buffer."""
-#     config = ska_sdp_config.Config()
-#     wipe_db(config)
-#
-#     for txn in config.txn():
-#         pb1_id = txn.new_processing_block_id('test')
-#         pb1 = ska_sdp_config.ProcessingBlock(
-#             pb1_id,
-#             sbi_id='sbi-test',
-#             parameters={"length": 10},
-#             dependencies=[],
-#             workflow=WORKFLOW)
-#
-#         txn.create_processing_block(pb1)
-#
-#     pb = workflow.ProcessingBlock(pb1_id)
-#     parameters = pb.get_parameters()
-#     assert parameters['length'] == 10
-#     out_buffer_res = pb.request_buffer(parameters['length'] * 6e15 / 3600, tags=['visibilities'])
-#     assert out_buffer_res is not None
-#
-#
-# def test_create_phase():
-#     """Test creating work phase."""
-#     config = ska_sdp_config.Config()
-#     wipe_db(config)
-#
-#     for txn in config.txn():
-#         pb1_id = txn.new_processing_block_id('test')
-#         pb1 = ska_sdp_config.ProcessingBlock(
-#             pb1_id,
-#             sbi_id='sbi-test',
-#             parameters={"length": 10},
-#             dependencies=[],
-#             workflow=WORKFLOW)
-#
-#         txn.create_processing_block(pb1)
-#
-#     pb = workflow.ProcessingBlock(pb1_id)
-#     parameters = pb.get_parameters()
-#     in_buffer_res = pb.request_buffer(100e6, tags=['sdm'])
-#     out_buffer_res = pb.request_buffer(parameters['length'] * 6e15 / 3600, tags=['visibilities'])
+    # Wipe the config DB
+    wipe_config_db()
 
-    # work_phase = pb.create_phase('Work', [in_buffer_res, out_buffer_res])
+    # Create sbi and pb
+    create_sbi_pbi()
 
-    #
-    # with work_phase:
-    #     # Create execution engine. Data island is created implicitly by given buffer resources.
-    #     # TODO: Island parallelism.
-    #
-    #     sbi = pb.sbi().is_finished()
-    #     assert sbi == 1
+    for txn in CONFIG_DB_CLIENT.txn():
+        pb_list = txn.list_processing_blocks()
+        for pb_id in pb_list:
+            pb = workflow.ProcessingBlock(pb_id)
+            parameters = pb.get_parameters()
+            assert parameters['length'] == 10
+            in_buffer_res = pb.request_buffer(100e6, tags=['sdm'])
+            out_buffer_res = pb.request_buffer(parameters['length'] * 6e15 / 3600,
+                                               tags=['visibilities'])
+            assert in_buffer_res is not None
+            assert out_buffer_res is not None
 
-        # deploy_id = 'proc-{}-vis-receive'.format(pb.id)
-        # chart = {'chart': 'vis-receive',}
-        # compute_stage = pb.deploy(
-        #     deploy_id, "helm", chart)
-#
-#         assert compute_stage is not None
-#
-#         # # Wait for stage to finish or subarray to be done
-#         # # wait-loop should be checking if the pb is cancelled or lost ownership
-#         # for txn in pb.wait_loop():
-#         #     # Checks
-#         #     if compute_stage.is_finished(txn):
-#         #         break
-#         #
-#         #     # For real-time
-#         #     if pb.is_finished(txn):
-#         #         break
-#         #
-#         #     if compute_stage.is_error(txn):
-#         #         pb.exit(txn, "Could not do real-time processing!")
-#         #         exit(1)
-#
-#
-# # def test_deploy_fail():
-# #     """Test deploy execution engine failed."""
+
+def test_create_phase():
+    """Test creating work phase."""
+
+    # Wipe the config DB
+    wipe_config_db()
+
+    # Create sbi and pb
+    create_sbi_pbi()
+
+    # Create processing block states
+    create_pb_states()
+
+    for txn in CONFIG_DB_CLIENT.txn():
+        pb_list = txn.list_processing_blocks()
+        for pb_id in pb_list:
+            pb = workflow.ProcessingBlock(pb_id)
+            parameters = pb.get_parameters()
+            in_buffer_res = pb.request_buffer(100e6, tags=['sdm'])
+            out_buffer_res = pb.request_buffer(
+                parameters['length'] * 6e15 / 3600, tags=['visibilities'])
+
+            work_phase = pb.create_phase('Work',
+                                         [in_buffer_res, out_buffer_res])
+
+            assert work_phase is not None
+
+
+def test_real_time_workflow():
+    """Test deploy realtime workflow."""
+
+    # Wipe the config DB
+    wipe_config_db()
+
+    # Create sbi and pb
+    create_sbi_pbi()
+
+    # Create processing block states
+    create_pb_states()
+
+    pb_id = 'pb-mvp01-20200425-00001'
+
+    pb = workflow.ProcessingBlock(pb_id)
+    parameters = pb.get_parameters()
+    in_buffer_res = pb.request_buffer(100e6, tags=['sdm'])
+    out_buffer_res = pb.request_buffer(
+        parameters['length'] * 6e15 / 3600, tags=['visibilities'])
+
+    work_phase = pb.create_phase('Work',
+                                 [in_buffer_res, out_buffer_res])
+
+    with work_phase:
+
+        for txn in CONFIG_DB_CLIENT.txn():
+            sbi_list = txn.list_scheduling_blocks()
+            for sbi_id in sbi_list:
+                sbi = txn.get_scheduling_block(sbi_id)
+                status = sbi.get('status')
+                assert status == 'ACTIVE'
+
+            pb_state = txn.get_processing_block_state(pb_id)
+            pb_status = pb_state.get('status')
+            assert pb_status == 'RUNNING'
+
+            sbi = {'subarray_id': None, 'status': 'FINISHED'}
+            sbi_state = txn.get_scheduling_block(sbi_id)
+            sbi_state.update(sbi)
+            txn.update_scheduling_block(sbi_id, sbi_state)
+
+            for sbi_id in sbi_list:
+                sbi = txn.get_scheduling_block(sbi_id)
+                status = sbi.get('status')
+                assert status == 'FINISHED'
+
+    for txn in CONFIG_DB_CLIENT.txn():
+        pb_state = txn.get_processing_block_state(pb_id)
+        pb_status = pb_state.get('status')
+        assert pb_status == 'FINISHED'
+
+
+# -----------------------------------------------------------------------------
+# Ancillary functions
+# -----------------------------------------------------------------------------
+
+
+def wipe_config_db():
+    """Remove all entries in the config DB."""
+    CONFIG_DB_CLIENT.backend.delete('/pb', must_exist=False, recursive=True)
+    CONFIG_DB_CLIENT.backend.delete('/sb', must_exist=False, recursive=True)
+    CONFIG_DB_CLIENT.backend.delete('/subarray', must_exist=False,
+                                    recursive=True)
+
+
+def create_sbi_pbi():
+    """Create scheduling block and processing block."""
+    sbi, pbs = get_sbi_pbs()
+    for txn in CONFIG_DB_CLIENT.txn():
+        sbi_id = sbi.get('id')
+        if sbi_id is not None:
+            txn.create_scheduling_block(sbi_id, sbi)
+        for pb in pbs:
+            txn.create_processing_block(pb)
+
+
+def get_sbi_pbs():
+    """Get SBI and PBs from configuration string."""
+    config = read_configuration_string()
+
+    sbi_id = config.get('id')
+    sbi = {
+        'id': sbi_id,
+        'subarray_id': SUBARRAY_ID,
+        'scan_types': config.get('scan_types'),
+        'pb_realtime': [],
+        'pb_batch': [],
+        'pb_receive_addresses': None,
+        'current_scan_type': None,
+        'scan_id': None,
+        'status': 'ACTIVE'
+    }
+
+    pbs = []
+    for pbc in config.get('processing_blocks'):
+        pb_id = pbc.get('id')
+        wf_type = pbc.get('workflow').get('type')
+        sbi['pb_' + wf_type].append(pb_id)
+        if 'dependencies' in pbc:
+            dependencies = pbc.get('dependencies')
+        else:
+            dependencies = []
+        pb = ska_sdp_config.ProcessingBlock(
+            pb_id, sbi_id, pbc.get('workflow'),
+            parameters=pbc.get('parameters'),
+            dependencies=dependencies
+        )
+        pbs.append(pb)
+
+    return sbi, pbs
+
+
+def create_pb_states():
+    """Create PB states in the config DB.
+
+    This creates the PB states with status = RUNNING, and for any workflow
+    matching the list of receive workflows, it adds the receive addresses.
+
+    """
+    # receive_addresses = read_receive_addresses()
+
+    for txn in CONFIG_DB_CLIENT.txn():
+        pb_list = txn.list_processing_blocks()
+        for pb_id in pb_list:
+            pb_state = txn.get_processing_block_state(pb_id)
+            if pb_state is None:
+                pb_state = {'status': 'RUNNING'}
+                # pb = txn.get_processing_block(pb_id)
+                # if pb.workflow['id'] in RECEIVE_WORKFLOWS:
+                #     sbi = txn.get_scheduling_block(pb.sbi_id)
+                #     sbi['pb_receive_addresses'] = pb_id
+                #     txn.update_scheduling_block(pb.sbi_id, sbi)
+                #     pb_state['receive_addresses'] = receive_addresses
+                txn.create_processing_block_state(pb_id, pb_state)
+
+
+def read_configuration_string():
+    """Read configuration string from JSON file."""
+    return read_json_data('configuration_string.json', decode=True)
+
+
+def read_receive_addresses():
+    """Read receive addresses from JSON file."""
+    return read_json_data('receive_addresses.json', decode=True)
+
+
+def read_json_data(filename, decode=False):
+    """Read JSON file from data directory.
+
+    :param decode: decode the JSON dat into Python
+
+    """
+    path = os.path.join(os.path.dirname(__file__), 'data', filename)
+    with open(path, 'r') as file:
+        data = file.read()
+    if decode:
+        data = json.loads(data)
+    return data
