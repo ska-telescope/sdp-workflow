@@ -72,12 +72,7 @@ def test_real_time_workflow():
     pb_id = 'pb-mvp01-20200425-00001'
     deploy_name = 'cbf-sdp-emulator'
     deploy_id = 'proc-{}-{}'.format(pb_id, deploy_name)
-
-    pb = workflow.ProcessingBlock(pb_id)
-    in_buffer_res = pb.request_buffer(100e6, tags=['sdm'])
-    out_buffer_res = pb.request_buffer(10 * 6e15 / 3600, tags=['visibilities'])
-
-    work_phase = pb.create_phase('Work', [in_buffer_res, out_buffer_res])
+    work_phase = create_work_phase(pb_id)
 
     with work_phase:
         for txn in CONFIG_DB_CLIENT.txn():
@@ -132,12 +127,7 @@ def test_batch_workflow():
     pb_id = 'pb-mvp01-20200425-00002'
     deploy_name = 'dask'
     n_workers = 2
-
-    pb = workflow.ProcessingBlock(pb_id)
-    in_buffer_res = pb.request_buffer(100e6, tags=['sdm'])
-    out_buffer_res = pb.request_buffer(10 * 6e15 / 3600, tags=['visibilities'])
-
-    work_phase = pb.create_phase('Work', [in_buffer_res, out_buffer_res])
+    work_phase = create_work_phase(pb_id)
 
     with work_phase:
         for txn in CONFIG_DB_CLIENT.txn():
@@ -177,7 +167,6 @@ def test_receive_addresses():
     pb = workflow.ProcessingBlock(pb_id)
     in_buffer_res = pb.request_buffer(100e6, tags=['sdm'])
     out_buffer_res = pb.request_buffer(10 * 6e15 / 3600, tags=['visibilities'])
-
     work_phase = pb.create_phase('Work', [in_buffer_res, out_buffer_res])
 
     with work_phase:
@@ -206,6 +195,14 @@ def wipe_config_db():
     CONFIG_DB_CLIENT.backend.delete('/sb', must_exist=False, recursive=True)
     CONFIG_DB_CLIENT.backend.delete('/subarray', must_exist=False,
                                     recursive=True)
+
+
+def create_work_phase(pb_id):
+    pb = workflow.ProcessingBlock(pb_id)
+    in_buffer_res = pb.request_buffer(100e6, tags=['sdm'])
+    out_buffer_res = pb.request_buffer(10 * 6e15 / 3600, tags=['visibilities'])
+    work_phase = pb.create_phase('Work', [in_buffer_res, out_buffer_res])
+    return work_phase
 
 
 def create_sbi_pbi():
