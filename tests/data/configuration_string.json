@@ -27,38 +27,15 @@
     },
     {
       "id": "pb-mvp01-20200425-00001",
-      "workflow": {"type": "realtime", "id": "test_realtime", "version": "0.2.1"},
-      "parameters": {"length": 10, "duration": 20}
-    },
-    {
-      "id": "pb-mvp01-20200425-00002",
-      "workflow": {"type": "realtime", "id": "pss_receive", "version": "0.2.0"},
-      "parameters": {"length": 10, "duration": 20}
-    },
-    {
-      "id": "pb-mvp01-20200425-00003",
       "workflow": {"type": "realtime", "id": "test_new_receive", "version": "0.1.0"},
       "parameters": {"length": 10, "duration": 20}
     },
     {
-      "id": "pb-mvp01-20200425-00004",
-      "workflow": {"type": "realtime", "id": "plasma_pipeline", "version": "0.1.0"},
-      "parameters": {"length": 10, "duration": 20}
-    },
-    {
-      "id": "pb-mvp01-20200425-00005",
+      "id": "pb-mvp01-20200425-00002",
       "workflow": {"type": "batch", "id": "test_dask", "version": "0.2.1"},
       "parameters": {"length": 10, "duration": 60},
       "dependencies": [
         {"pb_id": "pb-mvp01-20200425-00000", "type": ["calibration"]}
-      ]
-    },
-    {
-      "id": "pb-mvp01-20200425-00006",
-      "workflow": {"type": "batch", "id": "test_batch", "version": "0.2.1"},
-      "parameters": {"length": 10, "duration": 60},
-      "dependencies": [
-        {"pb_id": "pb-mvp01-20200425-00001", "type": ["visibilities"]}
       ]
     }
   ]

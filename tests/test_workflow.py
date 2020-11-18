@@ -8,9 +8,10 @@ import json
 import ska_sdp_config
 import logging
 
+from ska_telmodel.sdp.schema import validate_sdp_receive_addresses
 from ska_sdp_workflow import workflow
 
-LOG = logging.getLogger('worklow-test')
+LOG = logging.getLogger('workflow-test')
 LOG.setLevel(logging.DEBUG)
 
 CONFIG_DB_CLIENT = workflow.new_config_db()
@@ -18,7 +19,7 @@ SUBARRAY_ID = '01'
 
 
 def test_claim_processing_block():
-    """Test Claiming processing block"""
+    """Test claiming processing block"""
 
     # Wipe the config DB
     wipe_config_db()
@@ -56,35 +57,8 @@ def test_buffer_request():
             assert out_buffer_res is not None
 
 
-def test_create_phase():
-    """Test creating work phase."""
-
-    # Wipe the config DB
-    wipe_config_db()
-
-    # Create sbi and pb
-    create_sbi_pbi()
-
-    # Create processing block states
-    create_pb_states()
-
-    for txn in CONFIG_DB_CLIENT.txn():
-        pb_list = txn.list_processing_blocks()
-        for pb_id in pb_list:
-            pb = workflow.ProcessingBlock(pb_id)
-            parameters = pb.get_parameters()
-            in_buffer_res = pb.request_buffer(100e6, tags=['sdm'])
-            out_buffer_res = pb.request_buffer(
-                parameters['length'] * 6e15 / 3600, tags=['visibilities'])
-
-            work_phase = pb.create_phase('Work',
-                                         [in_buffer_res, out_buffer_res])
-
-            assert work_phase is not None
-
-
 def test_real_time_workflow():
-    """Test deploy realtime workflow."""
+    """Test real time workflow."""
 
     # Wipe the config DB
     wipe_config_db()
@@ -96,18 +70,16 @@ def test_real_time_workflow():
     create_pb_states()
 
     pb_id = 'pb-mvp01-20200425-00001'
+    deploy_name = 'cbf-sdp-emulator'
+    deploy_id = 'proc-{}-{}'.format(pb_id, deploy_name)
 
     pb = workflow.ProcessingBlock(pb_id)
-    parameters = pb.get_parameters()
     in_buffer_res = pb.request_buffer(100e6, tags=['sdm'])
-    out_buffer_res = pb.request_buffer(
-        parameters['length'] * 6e15 / 3600, tags=['visibilities'])
+    out_buffer_res = pb.request_buffer(10 * 6e15 / 3600, tags=['visibilities'])
 
-    work_phase = pb.create_phase('Work',
-                                 [in_buffer_res, out_buffer_res])
+    work_phase = pb.create_phase('Work', [in_buffer_res, out_buffer_res])
 
     with work_phase:
-
         for txn in CONFIG_DB_CLIENT.txn():
             sbi_list = txn.list_scheduling_blocks()
             for sbi_id in sbi_list:
@@ -115,16 +87,20 @@ def test_real_time_workflow():
                 status = sbi.get('status')
                 assert status == 'ACTIVE'
 
-            pb_state = txn.get_processing_block_state(pb_id)
-            pb_status = pb_state.get('status')
-            assert pb_status == 'RUNNING'
+                pb_state = txn.get_processing_block_state(pb_id)
+                pb_status = pb_state.get('status')
+                assert pb_status == 'RUNNING'
 
-            sbi = {'subarray_id': None, 'status': 'FINISHED'}
-            sbi_state = txn.get_scheduling_block(sbi_id)
-            sbi_state.update(sbi)
-            txn.update_scheduling_block(sbi_id, sbi_state)
+                work_phase.ee_deploy_helm(deploy_name)
+                deployment_list = txn.list_deployments()
+                assert deploy_id in deployment_list
 
-            for sbi_id in sbi_list:
+                # Set scheduling block instance to FINISHED
+                sbi = {'subarray_id': None, 'status': 'FINISHED'}
+                sbi_state = txn.get_scheduling_block(sbi_id)
+                sbi_state.update(sbi)
+                txn.update_scheduling_block(sbi_id, sbi_state)
+
                 sbi = txn.get_scheduling_block(sbi_id)
                 status = sbi.get('status')
                 assert status == 'FINISHED'
@@ -133,6 +109,90 @@ def test_real_time_workflow():
         pb_state = txn.get_processing_block_state(pb_id)
         pb_status = pb_state.get('status')
         assert pb_status == 'FINISHED'
+
+
+def test_batch_workflow():
+    """Test batch workflow"""
+
+    def calc(x, y):
+        x1 = x
+        y1 = y
+        z = x1+y1
+        return z
+
+    # Wipe the config DB
+    wipe_config_db()
+
+    # Create sbi and pb
+    create_sbi_pbi()
+
+    # Create processing block states
+    create_pb_states()
+
+    pb_id = 'pb-mvp01-20200425-00002'
+    deploy_name = 'dask'
+    n_workers = 2
+
+    pb = workflow.ProcessingBlock(pb_id)
+    in_buffer_res = pb.request_buffer(100e6, tags=['sdm'])
+    out_buffer_res = pb.request_buffer(10 * 6e15 / 3600, tags=['visibilities'])
+
+    work_phase = pb.create_phase('Work', [in_buffer_res, out_buffer_res])
+
+    with work_phase:
+        for txn in CONFIG_DB_CLIENT.txn():
+            pb_state = txn.get_processing_block_state(pb_id)
+            pb_status = pb_state.get('status')
+            assert pb_status == 'RUNNING'
+
+            deploy = work_phase.ee_deploy_dask(deploy_name, n_workers, calc, (1, 5))
+            deploy_id = deploy.get_id()
+            assert deploy_id in txn.list_deployments()
+
+            state = txn.get_processing_block_state(pb_id)
+            deployments = state.get("deployments")
+            deployments[deploy_id] = 'FINISHED'
+            state['deployments'] = deployments
+            txn.update_processing_block_state(pb_id, state)
+
+    for txn in CONFIG_DB_CLIENT.txn():
+        pb_state = txn.get_processing_block_state(pb_id)
+        pb_status = pb_state.get('status')
+        assert pb_status == 'FINISHED'
+
+
+def test_receive_addresses():
+    """Test generating and updating receive addresses."""
+
+    # Wipe the config DB
+    wipe_config_db()
+
+    # Create sbi and pb
+    create_sbi_pbi()
+
+    # Create processing block states
+    create_pb_states()
+
+    pb_id = 'pb-mvp01-20200425-00000'
+    pb = workflow.ProcessingBlock(pb_id)
+    in_buffer_res = pb.request_buffer(100e6, tags=['sdm'])
+    out_buffer_res = pb.request_buffer(10 * 6e15 / 3600, tags=['visibilities'])
+
+    work_phase = pb.create_phase('Work', [in_buffer_res, out_buffer_res])
+
+    with work_phase:
+
+        # Get the channel link map from SBI
+        scan_types = pb.get_scan_types()
+        pb.receive_addresses(scan_types)
+
+    # Get the expected receive addresses from the data file
+    receive_addresses_expected = read_receive_addresses()
+    for txn in CONFIG_DB_CLIENT.txn():
+        state = txn.get_processing_block_state(pb_id)
+        pb_receive_addresses = state.get('receive_addresses')
+        assert pb_receive_addresses == receive_addresses_expected
+        validate_sdp_receive_addresses(3, pb_receive_addresses, 2)
 
 
 # -----------------------------------------------------------------------------
@@ -210,12 +270,6 @@ def create_pb_states():
             pb_state = txn.get_processing_block_state(pb_id)
             if pb_state is None:
                 pb_state = {'status': 'RUNNING'}
-                # pb = txn.get_processing_block(pb_id)
-                # if pb.workflow['id'] in RECEIVE_WORKFLOWS:
-                #     sbi = txn.get_scheduling_block(pb.sbi_id)
-                #     sbi['pb_receive_addresses'] = pb_id
-                #     txn.update_scheduling_block(pb.sbi_id, sbi)
-                #     pb_state['receive_addresses'] = receive_addresses
                 txn.create_processing_block_state(pb_id, pb_state)
 
 
