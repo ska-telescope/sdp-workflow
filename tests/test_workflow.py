@@ -195,6 +195,8 @@ def wipe_config_db():
     CONFIG_DB_CLIENT.backend.delete('/sb', must_exist=False, recursive=True)
     CONFIG_DB_CLIENT.backend.delete('/subarray', must_exist=False,
                                     recursive=True)
+    CONFIG_DB_CLIENT.backend.delete('/deploy', must_exist=False,
+                                    recursive=True)
 
 
 def create_work_phase(pb_id):
