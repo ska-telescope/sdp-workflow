@@ -126,7 +126,7 @@ def test_batch_workflow():
 
     pb_id = 'pb-mvp01-20200425-00002'
     deploy_name = 'dask'
-    deploy_id = 'proc-{}-{}'.format(pb_id, deploy_name)
+    # deploy_id = 'proc-{}-{}'.format(pb_id, deploy_name)
     n_workers = 2
     work_phase = create_work_phase(pb_id)
 
@@ -136,12 +136,17 @@ def test_batch_workflow():
             pb_status = pb_state.get('status')
             assert pb_status == 'RUNNING'
 
-            deploy = work_phase.ee_deploy_dask(deploy_name, n_workers, calc, (1, 5))
-            deploy_id_from_lib = deploy.get_id()
-            LOG.info(deploy_id_from_lib)
-            deployment_list = txn.list_deployments()
-            assert deploy_id in deployment_list
+        deploy = work_phase.ee_deploy_dask(deploy_name, n_workers, calc, (1, 5))
 
+        for txn in CONFIG_DB_CLIENT.txn():
+            deploy_id = deploy.get_id()
+            if deploy_id is not None:
+                deployment_list = txn.list_deployments()
+                assert deploy_id in deployment_list
+                break
+            txn.loop(wait=True)
+
+        for txn in CONFIG_DB_CLIENT.txn():
             state = txn.get_processing_block_state(pb_id)
             deployments = state.get("deployments")
             deployments[deploy_id] = 'FINISHED'
