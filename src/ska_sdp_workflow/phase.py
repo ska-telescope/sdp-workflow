@@ -6,7 +6,7 @@ import logging
 
 from .dask_deploy import DaskDeploy
 from .helm_deploy import HelmDeploy
-from .test_deploy import TestDeploy
+from .fake_deploy import FakeDeploy
 
 LOG = logging.getLogger('ska_sdp_workflow')
 
@@ -113,7 +113,7 @@ class Phase:
         :param f_args: function arguments
 
         """
-        return TestDeploy(self._pb_id, self._config, deploy_name,
+        return FakeDeploy(self._pb_id, self._config, deploy_name,
                           func=func, f_args=f_args)
 
     def ee_deploy_helm(self, deploy_name, values=None):
