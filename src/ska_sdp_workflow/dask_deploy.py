@@ -45,6 +45,7 @@ class DaskDeploy(EEDeploy):
         """
         LOG.info("Deploying Dask...")
         self._deploy_id = 'proc-{}-{}'.format(self._pb_id, deploy_name)
+        LOG.info(self._deploy_id)
 
         # Set Deployment to RUNNING status in the config_db
         self.update_deploy_status('RUNNING')
