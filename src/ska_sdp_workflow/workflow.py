@@ -1,132 +1,72 @@
-"""High-level API for SKA SDP workflow."""
+"""High-level API for SKA SDP workflows."""
 # pylint: disable=invalid-name
-# pylint: disable=too-few-public-methods
+# pylint: disable=no-self-use
 
-import sys
-import time
 import logging
+import sys
 import ska.logging
 import ska_sdp_config
 
+from .phase import Phase
+from .buffer_request import BufferRequest
+from .feature_toggle import FeatureToggle
+
+FEATURE_CONFIG_DB = FeatureToggle('config_db', True)
+
+# Initialise logging
 ska.logging.configure_logging()
-LOG = logging.getLogger('worklow')
+LOG = logging.getLogger('ska_sdp_workflow')
 LOG.setLevel(logging.DEBUG)
 
 
-class Workflow:
+def new_config_db():
+    """Return an SDP configuration client (factory function)."""
+    backend = 'etcd3' if FEATURE_CONFIG_DB.is_active() else 'memory'
+    LOG.info("Using config DB %s backend", backend)
+    config_db = ska_sdp_config.Config(backend=backend)
+    return config_db
 
-    def __init__(self):
-        """Initialise."""
+
+class ProcessingBlock:
+    """
+    Claim the processing block.
+
+    :param pb_id: processing block ID
+    :type pb_id: str, optional
+    """
+
+    def __init__(self, pb_id=None):
         # Get connection to config DB
         LOG.info('Opening connection to config DB')
-        self._config = ska_sdp_config.Config()
+        self._config = new_config_db()
 
-    def claim_processing_block(self, pb_id):
-        """Claim processing block.
+        # Processing block ID
+        if pb_id is None:
+            self._pb_id = sys.argv[1]
+        else:
+            self._pb_id = pb_id
+        LOG.debug("Processing Block ID %s", self._pb_id)
 
-        :param pb_id: processing block ID
-        :returns: Scheduling block ID
-
-        """
+        # Claim processing block
         for txn in self._config.txn():
-            txn.take_processing_block(pb_id, self._config.client_lease)
-            pb = txn.get_processing_block(pb_id)
+            txn.take_processing_block(self._pb_id, self._config.client_lease)
+            pb = txn.get_processing_block(self._pb_id)
         LOG.info('Claimed processing block')
 
-        sbi_id = pb.sbi_id
-        return sbi_id
+        # Processing Block
+        self._pb = pb
 
-    def resource_request(self, pb_id):
-        """Make resource request, assuming input is in the form of a dict.
+        # Scheduling Block Instance ID
+        self._sbi_id = pb.sbi_id
 
-        :param pb_id: processing block ID
-
+    def receive_addresses(self, scan_types):
         """
-        # Set state to indicate workflow is waiting for resources.
-        LOG.info('Setting status to WAITING')
-        for txn in self._config.txn():
-            state = txn.get_processing_block_state(pb_id)
-            state['status'] = 'WAITING'
-            txn.update_processing_block_state(pb_id, state)
-
-        # Wait for resources_available to be true
-        LOG.info('Waiting for resources to be available')
-        for txn in self._config.txn():
-            state = txn.get_processing_block_state(pb_id)
-            ra = state.get('resources_available')
-            if ra is not None and ra:
-                LOG.info('Resources are available')
-                break
-            txn.loop(wait=True)
-
-    # def release(self, status):
-    #     pass
-
-    def process_started(self, pb_id):
-        """The process is started.
-
-        :param pb_id: processing block ID
-
-        """
-        # Set state to indicate processing has started
-        LOG.info('Setting status to RUNNING')
-        for txn in self._config.txn():
-            state = txn.get_processing_block_state(pb_id)
-            state['status'] = 'RUNNING'
-            txn.update_processing_block_state(pb_id, state)
-
-    def monitor_sbi(self, sbi_id, pb_id):
-        """For real-time workflows, wait for something to change in the SBI.
-
-        :param pb_id: processing block ID
-        :param sbi_id: scheduling block ID
-
-        """
-        # Wait until SBI is marked as FINISHED or CANCELLED
-        LOG.info('Waiting for SBI to end')
-        for txn in self._config.txn():
-            sbi = txn.get_scheduling_block(sbi_id)
-            status = sbi.get('status')
-            if status in ['FINISHED', 'CANCELLED']:
-                LOG.info('SBI is %s', status)
-                break
-            txn.loop(wait=True)
-
-        # Set state to indicate processing has ended
-        LOG.info('Setting status to %s', status)
-        for txn in self._config.txn():
-            state = txn.get_processing_block_state(pb_id)
-            state['status'] = status
-            txn.update_processing_block_state(pb_id, state)
-
-    def monitor_sbi_batch(self, pb_id, duration):
-        """Monitor SBI for batch workflows.
-
-        :param pb_id: processing block ID
-        :param duration: duration parameter
-
-        """
-        # Do some 'processing' for the required duration
-        LOG.info('Starting processing for %f s', duration)
-        time.sleep(duration)
-        LOG.info('Finished processing')
-
-        # Set state to indicate processing has ended
-        LOG.info('Setting status to FINISHED')
-        for txn in self._config.txn():
-            state = txn.get_processing_block_state(pb_id)
-            state['status'] = 'FINISHED'
-            txn.update_processing_block_state(pb_id, state)
-
-    def receive_addresses(self, scan_types, sbi_id, pb_id):
-        """Generate receive addresses and update it in the processing block state.
+        Generate receive addresses and update the processing block state.
 
         :param scan_types: Scan types
-        :param sbi_id: scheduling block ID
-        :param pb_id: processing block ID
+        :type scan_types: list
 
         """
-
         # Generate receive addresses
         LOG.info('Generating receive addresses')
         receive_addresses = self._generate_receive_addresses(scan_types)
@@ -134,49 +74,95 @@ class Workflow:
         # Update receive addresses in processing block state
         LOG.info('Updating receive addresses in processing block state')
         for txn in self._config.txn():
-            state = txn.get_processing_block_state(pb_id)
+            state = txn.get_processing_block_state(self._pb_id)
             state['receive_addresses'] = receive_addresses
-            txn.update_processing_block_state(pb_id, state)
+            txn.update_processing_block_state(self._pb_id, state)
 
         # Write pb_id in pb_receive_addresses in SBI
         LOG.info('Writing PB ID to pb_receive_addresses in SBI')
         for txn in self._config.txn():
-            sbi = txn.get_scheduling_block(sbi_id)
-            sbi['pb_receive_addresses'] = pb_id
-            txn.update_scheduling_block(sbi_id, sbi)
+            sbi = txn.get_scheduling_block(self._sbi_id)
+            sbi['pb_receive_addresses'] = self._pb_id
+            txn.update_scheduling_block(self._sbi_id, sbi)
 
-    def get_parameters(self, pb_id):
-        """Get workflow parameters from processing block as a dict, parsing with schema.
+    def get_parameters(self, schema=None):
+        """
+        Get workflow parameters from processing block.
 
-        :param pb_id: processing block ID
-        :returns: duration parameter - TEMPORARY
+        The schema checking is not currently implemented.
+
+        :param schema: schema to validate the parameters
+        :returns: processing block parameters
+        :rtype: dict
 
         """
-        for txn in self._config.txn():
-            pb = txn.get_processing_block(pb_id)
-            # TODO (NJT): Not just duration parameter - But this just for the time being
-            # Get parameter and parse it
-            duration = pb.parameters.get('duration')
-            if duration is None:
-                duration = 60.0
-            LOG.info('duration: %f s', duration)
-        return duration
+        parameters = self._pb.parameters
+        if schema is not None:
+            LOG.info("Validating parameters against schema")
 
-    def get_scan_types(self, sbi_id):
-        """Get scan types.
+        return parameters
 
-        :param sbi_id: Scheduling block ID
+    def get_scan_types(self):
+        """
+        Get scan types from the scheduling block instance.
+
+        This is only supported for real-time workflows
+
+        :returns: scan types
+        :rtype: list
 
         """
         LOG.info('Retrieving channel link map from SBI')
         for txn in self._config.txn():
-            sbi = txn.get_scheduling_block(sbi_id)
+            sbi = txn.get_scheduling_block(self._sbi_id)
             scan_types = sbi.get('scan_types')
 
         return scan_types
 
-    # def get_definition(self, pb_id):
-    #     pass
+    def request_buffer(self, size, tags):
+        """
+        Request a buffer reservation.
+
+        This returns a buffer reservation request that is used to create a
+        workflow phase. These are currently only placeholders.
+
+        :param size: size of the buffer
+        :type size: float
+        :param tags: tags describing the type of buffer required
+        :type tags: list of str
+        :returns: buffer reservation request
+        :rtype: :class:`BufferRequest`
+
+        """
+        return BufferRequest(size, tags)
+
+    def create_phase(self, name, requests):
+        """
+        Create a workflow phase for deploying execution engines.
+
+        The phase is created with a list of resource requests which must be
+        satisfied before the phase can start executing. For the time being the
+        only resource requests are (placeholder) buffer reservations, but
+        eventually this will include compute requests too.
+
+        :param name: name of the phase
+        :type name: str
+        :param requests: resource requests
+        :type requests: list of :class:`BufferRequest`
+        :returns: the phase
+        :rtype: :class:`Phase`
+
+        """
+        workflow = self._pb.workflow
+        workflow_type = workflow['type']
+        return Phase(name, requests, self._config,
+                     self._pb_id, self._sbi_id, workflow_type)
+
+    def exit(self):
+        """Close connection to the configuration."""
+
+        LOG.info('Closing connection to config DB')
+        self._config.close()
 
     # -------------------------------------
     # Private methods
@@ -212,9 +198,6 @@ class Workflow:
         receive_addresses = {}
         for scan_type in scan_types:
             channels = scan_type.get('channels')
-            receive_addresses[scan_type.get('id')] = self._minimal_receive_addresses(channels)
+            receive_addresses[scan_type.get('id')] = \
+                self._minimal_receive_addresses(channels)
         return receive_addresses
-
-
-
-
