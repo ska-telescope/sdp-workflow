@@ -187,7 +187,7 @@ class ProcessingBlock:
             # DNS Based IP addresses
             # os.environ['SDP_HELM_NAMESPACE']
             host.append([start, deploy_name + '.receive.' +
-                         'sdp.' + "svc.cluster.local"])
+                         'sdp' + ".svc.cluster.local"])
             port.append([start, 9000, 1])
         receive_addresses = dict(host=host, port=port)
         return receive_addresses
