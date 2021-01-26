@@ -185,9 +185,9 @@ class ProcessingBlock:
             start = chan.get('start')
             # recv-receive-0.receive.default.svc.cluster.local
             # DNS Based IP addresses
+            # os.environ['SDP_HELM_NAMESPACE']
             host.append([start, deploy_name + '.receive.' +
                          'sdp.' + "svc.cluster.local"])
-            # host.append([start, '192.168.0.{}'.format(i + 1)])
             port.append([start, 9000, 1])
         receive_addresses = dict(host=host, port=port)
         return receive_addresses
