@@ -182,7 +182,7 @@ def test_receive_addresses():
 
         # Get the channel link map from SBI
         scan_types = pb.get_scan_types()
-        pb.receive_addresses(scan_types)
+        pb.receive_addresses("test-receive", scan_types)
 
     # Get the expected receive addresses from the data file
     receive_addresses_expected = read_receive_addresses()

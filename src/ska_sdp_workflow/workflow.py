@@ -182,9 +182,9 @@ class ProcessingBlock:
         """
         host = []
         port = []
-        for i, chan in enumerate(channels):
+        for chan in channels:
             start = chan.get('start')
-            # recv-receive-2.receive.default.svc.cluster.local
+            # recv-receive-0.receive.default.svc.cluster.local
             # DNS Based IP addresses
             host.append([deploy_name + '.receive.' +
                          os.environ['SDP_HELM_NAMESPACE'] +
