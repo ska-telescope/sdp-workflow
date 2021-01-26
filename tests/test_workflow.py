@@ -174,24 +174,37 @@ def test_receive_addresses():
 
     pb_id = 'pb-mvp01-20200425-00000'
     pb = workflow.ProcessingBlock(pb_id)
-    in_buffer_res = pb.request_buffer(100e6, tags=['sdm'])
-    out_buffer_res = pb.request_buffer(10 * 6e15 / 3600, tags=['visibilities'])
-    work_phase = pb.create_phase('Work', [in_buffer_res, out_buffer_res])
-
-    with work_phase:
-
-        # Get the channel link map from SBI
-        scan_types = pb.get_scan_types()
-        pb.receive_addresses("test-receive", scan_types)
+    work_phase = pb.create_phase('Work', [])
 
     # Get the expected receive addresses from the data file
     receive_addresses_expected = read_receive_addresses()
-    for txn in CONFIG_DB_CLIENT.txn():
-        state = txn.get_processing_block_state(pb_id)
-        pb_receive_addresses = state.get('receive_addresses')
-        assert pb_receive_addresses == receive_addresses_expected
-        get_sdp_receive_addresses_schema(3, True).validate(pb_receive_addresses)
 
+    with work_phase:
+        for txn in CONFIG_DB_CLIENT.txn():
+            sbi_list = txn.list_scheduling_blocks()
+            for sbi_id in sbi_list:
+
+                work_phase.ee_deploy_helm('test-receive')
+
+                # Get the channel link map from SBI
+                scan_types = pb.get_scan_types()
+                pb.receive_addresses("test-receive", scan_types)
+
+                state = txn.get_processing_block_state(pb_id)
+                pb_receive_addresses = state.get('receive_addresses')
+                assert pb_receive_addresses == receive_addresses_expected
+                get_sdp_receive_addresses_schema(3, True).validate(pb_receive_addresses)
+
+                # Set scheduling block instance to FINISHED
+                sbi = {'subarray_id': None, 'status': 'FINISHED'}
+                sbi_state = txn.get_scheduling_block(sbi_id)
+                sbi_state.update(sbi)
+                txn.update_scheduling_block(sbi_id, sbi_state)
+
+    for txn in CONFIG_DB_CLIENT.txn():
+        pb_state = txn.get_processing_block_state(pb_id)
+        pb_status = pb_state.get('status')
+        assert pb_status == 'FINISHED'
 
 # -----------------------------------------------------------------------------
 # Ancillary functions
