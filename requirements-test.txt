@@ -5,4 +5,4 @@ pytest
 pytest-cov
 pytest-pylint
 pytest-runner
-ska-telescope-model==0.1.0
+ska-telescope-model>=0.1.0

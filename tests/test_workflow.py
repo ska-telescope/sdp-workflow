@@ -9,7 +9,7 @@ import json
 import logging
 import ska_sdp_config
 
-from ska_telmodel.sdp.schema import validate_sdp_receive_addresses
+from ska_telmodel.sdp.schema import get_sdp_receive_addresses_schema
 from ska_sdp_workflow import workflow
 
 LOG = logging.getLogger('workflow-test')
@@ -190,7 +190,7 @@ def test_receive_addresses():
         state = txn.get_processing_block_state(pb_id)
         pb_receive_addresses = state.get('receive_addresses')
         assert pb_receive_addresses == receive_addresses_expected
-        validate_sdp_receive_addresses(3, pb_receive_addresses, 2)
+        get_sdp_receive_addresses_schema(3, True).validate(pb_receive_addresses)
 
 
 # -----------------------------------------------------------------------------
