@@ -7,6 +7,7 @@
 import os
 import json
 import logging
+from unittest.mock import patch
 import ska_sdp_config
 
 from ska_telmodel.sdp.schema import get_sdp_receive_addresses_schema
@@ -17,6 +18,9 @@ LOG.setLevel(logging.DEBUG)
 
 CONFIG_DB_CLIENT = workflow.new_config_db()
 SUBARRAY_ID = '01'
+MOCK_ENV_VARS = {
+    'SDP_HELM_NAMESPACE': 'sdp'
+}
 
 
 def test_claim_processing_block():
@@ -107,6 +111,7 @@ def test_real_time_workflow():
         assert pb_status == 'FINISHED'
 
 
+@patch.dict(os.environ, MOCK_ENV_VARS)
 def test_batch_workflow():
     """Test batch workflow"""
 
@@ -160,6 +165,7 @@ def test_batch_workflow():
         assert pb_status == 'FINISHED'
 
 
+@patch.dict(os.environ, MOCK_ENV_VARS)
 def test_receive_addresses():
     """Test generating and updating receive addresses."""
 
@@ -173,22 +179,24 @@ def test_receive_addresses():
     create_pb_states()
 
     pb_id = 'pb-mvp01-20200425-00000'
+    deploy_name = 'test-receive'
     pb = workflow.ProcessingBlock(pb_id)
     work_phase = pb.create_phase('Work', [])
 
     # Get the expected receive addresses from the data file
     receive_addresses_expected = read_receive_addresses()
 
+
     with work_phase:
         for txn in CONFIG_DB_CLIENT.txn():
             sbi_list = txn.list_scheduling_blocks()
             for sbi_id in sbi_list:
 
-                work_phase.ee_deploy_helm('test-receive')
+                work_phase.ee_deploy_helm(deploy_name)
 
                 # Get the channel link map from SBI
                 scan_types = pb.get_scan_types()
-                pb.receive_addresses("test-receive", scan_types)
+                pb.receive_addresses(scan_types)
 
                 state = txn.get_processing_block_state(pb_id)
                 pb_receive_addresses = state.get('receive_addresses')
@@ -282,7 +290,6 @@ def create_pb_states():
     matching the list of receive workflows, it adds the receive addresses.
 
     """
-    # receive_addresses = read_receive_addresses()
 
     for txn in CONFIG_DB_CLIENT.txn():
         pb_list = txn.list_processing_blocks()

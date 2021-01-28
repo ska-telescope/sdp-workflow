@@ -3,6 +3,7 @@
 # pylint: disable=no-self-use
 
 import logging
+import os
 import sys
 import ska.logging
 import ska_sdp_config
@@ -59,19 +60,17 @@ class ProcessingBlock:
         # Scheduling Block Instance ID
         self._sbi_id = pb.sbi_id
 
-    def receive_addresses(self, deploy_name, scan_types):
+    def receive_addresses(self, scan_types):
         """
         Generate receive addresses and update the processing block state.
 
-        :param deploy_name: Deployment name
         :param scan_types: Scan types
         :type scan_types: list
 
         """
         # Generate receive addresses
         LOG.info('Generating receive addresses')
-        receive_addresses = self._generate_receive_addresses(deploy_name,
-                                                             scan_types)
+        receive_addresses = self._generate_receive_addresses(scan_types)
 
         # Update receive addresses in processing block state
         LOG.info('Updating receive addresses in processing block state')
@@ -170,11 +169,10 @@ class ProcessingBlock:
     # Private methods
     # -------------------------------------
 
-    def _minimal_receive_addresses(self, deploy_name, channels):
+    def _minimal_receive_addresses(self, channels):
         """
         Generate a minimal version of the receive addresses for a single scan type.
 
-        :param deploy_name: Deployment name
         :param channels: list of channels
         :returns: receive addresses
 
@@ -183,22 +181,25 @@ class ProcessingBlock:
         port = []
         for chan in channels:
             start = chan.get('start')
-            # recv-receive-0.receive.default.svc.cluster.local
+
             # DNS Based IP addresses
-            # os.environ['SDP_HELM_NAMESPACE']
-            host.append([start, deploy_name + '.receive.' +
-                         'sdp' + ".svc.cluster.local"])
+            # 'proc-{}-{}'.format(self._pb_id, deploy_name)
+            for txn in self._config.txn():
+                for deploy_id in txn.list_deployments():
+                    if self._pb_id in deploy_id:
+                        host.append([start,  deploy_id + '.receive.' +
+                                     os.environ['SDP_HELM_NAMESPACE'] +
+                                     ".svc.cluster.local"])
             port.append([start, 9000, 1])
         receive_addresses = dict(host=host, port=port)
         return receive_addresses
 
-    def _generate_receive_addresses(self, deploy_name, scan_types):
+    def _generate_receive_addresses(self, scan_types):
         """
         Generate receive addresses for all scan types.
 
         This function generates a minimal fake response.
 
-        :param deploy_name: Deployment name
         :param scan_types: scan types from SBI
         :return: receive addresses
 
@@ -207,5 +208,5 @@ class ProcessingBlock:
         for scan_type in scan_types:
             channels = scan_type.get('channels')
             receive_addresses[scan_type.get('id')] = \
-                self._minimal_receive_addresses(deploy_name, channels)
+                self._minimal_receive_addresses(channels)
         return receive_addresses
