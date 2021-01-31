@@ -29,7 +29,7 @@ setuptools.setup(
     license='License :: OSI Approved :: BSD License',
     long_description=LONG_DESCRIPTION,
     long_description_content_type='text/markdown',
-    url='https://gitlab.com/ska-telescope/sdp-workflow',
+    url='https://gitlab.com/ska-telescope/sdp/ska-sdp-workflow',
     package_dir={"": "src"},
     packages=setuptools.find_packages('src'),
     install_requires=requirements_from('requirements.txt'),

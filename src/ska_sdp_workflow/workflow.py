@@ -12,17 +12,17 @@ from .phase import Phase
 from .buffer_request import BufferRequest
 from .feature_toggle import FeatureToggle
 
-FEATURE_CONFIG_DB = FeatureToggle('config_db', True)
+FEATURE_CONFIG_DB = FeatureToggle("config_db", True)
 
 # Initialise logging
 ska.logging.configure_logging()
-LOG = logging.getLogger('ska_sdp_workflow')
+LOG = logging.getLogger("ska_sdp_workflow")
 LOG.setLevel(logging.DEBUG)
 
 
 def new_config_db():
     """Return an SDP configuration client (factory function)."""
-    backend = 'etcd3' if FEATURE_CONFIG_DB.is_active() else 'memory'
+    backend = "etcd3" if FEATURE_CONFIG_DB.is_active() else "memory"
     LOG.info("Using config DB %s backend", backend)
     config_db = ska_sdp_config.Config(backend=backend)
     return config_db
@@ -38,7 +38,7 @@ class ProcessingBlock:
 
     def __init__(self, pb_id=None):
         # Get connection to config DB
-        LOG.info('Opening connection to config DB')
+        LOG.info("Opening connection to config DB")
         self._config = new_config_db()
 
         # Processing block ID
@@ -52,7 +52,7 @@ class ProcessingBlock:
         for txn in self._config.txn():
             txn.take_processing_block(self._pb_id, self._config.client_lease)
             pb = txn.get_processing_block(self._pb_id)
-        LOG.info('Claimed processing block')
+        LOG.info("Claimed processing block")
 
         # Processing Block
         self._pb = pb
@@ -69,21 +69,21 @@ class ProcessingBlock:
 
         """
         # Generate receive addresses
-        LOG.info('Generating receive addresses')
+        LOG.info("Generating receive addresses")
         receive_addresses = self._generate_receive_addresses(scan_types)
 
         # Update receive addresses in processing block state
-        LOG.info('Updating receive addresses in processing block state')
+        LOG.info("Updating receive addresses in processing block state")
         for txn in self._config.txn():
             state = txn.get_processing_block_state(self._pb_id)
-            state['receive_addresses'] = receive_addresses
+            state["receive_addresses"] = receive_addresses
             txn.update_processing_block_state(self._pb_id, state)
 
         # Write pb_id in pb_receive_addresses in SBI
-        LOG.info('Writing PB ID to pb_receive_addresses in SBI')
+        LOG.info("Writing PB ID to pb_receive_addresses in SBI")
         for txn in self._config.txn():
             sbi = txn.get_scheduling_block(self._sbi_id)
-            sbi['pb_receive_addresses'] = self._pb_id
+            sbi["pb_receive_addresses"] = self._pb_id
             txn.update_scheduling_block(self._sbi_id, sbi)
 
     def get_parameters(self, schema=None):
@@ -113,10 +113,10 @@ class ProcessingBlock:
         :rtype: list
 
         """
-        LOG.info('Retrieving channel link map from SBI')
+        LOG.info("Retrieving channel link map from SBI")
         for txn in self._config.txn():
             sbi = txn.get_scheduling_block(self._sbi_id)
-            scan_types = sbi.get('scan_types')
+            scan_types = sbi.get("scan_types")
 
         return scan_types
 
@@ -155,14 +155,15 @@ class ProcessingBlock:
 
         """
         workflow = self._pb.workflow
-        workflow_type = workflow['type']
-        return Phase(name, requests, self._config,
-                     self._pb_id, self._sbi_id, workflow_type)
+        workflow_type = workflow["type"]
+        return Phase(
+            name, requests, self._config, self._pb_id, self._sbi_id, workflow_type
+        )
 
     def exit(self):
         """Close connection to the configuration."""
 
-        LOG.info('Closing connection to config DB')
+        LOG.info("Closing connection to config DB")
         self._config.close()
 
     # -------------------------------------
@@ -181,14 +182,20 @@ class ProcessingBlock:
         port = []
         for txn in self._config.txn():
             for chan in channels:
-                start = chan.get('start')
+                start = chan.get("start")
 
                 # DNS Based IP addresses
                 for deploy_id in txn.list_deployments():
                     if self._pb_id in deploy_id:
-                        host.append([start,  deploy_id + '.receive.' +
-                                     os.environ['SDP_HELM_NAMESPACE'] +
-                                     ".svc.cluster.local"])
+                        host.append(
+                            [
+                                start,
+                                deploy_id
+                                + ".receive."
+                                + os.environ["SDP_HELM_NAMESPACE"]
+                                + ".svc.cluster.local",
+                            ]
+                        )
                 port.append([start, 9000, 1])
         receive_addresses = dict(host=host, port=port)
         return receive_addresses
@@ -205,7 +212,8 @@ class ProcessingBlock:
         """
         receive_addresses = {}
         for scan_type in scan_types:
-            channels = scan_type.get('channels')
-            receive_addresses[scan_type.get('id')] = \
-                self._minimal_receive_addresses(channels)
+            channels = scan_type.get("channels")
+            receive_addresses[scan_type.get("id")] = self._minimal_receive_addresses(
+                channels
+            )
         return receive_addresses

@@ -28,7 +28,7 @@ class EEDeploy:
             state = txn.get_processing_block_state(self._pb_id)
             deployments = state.get("deployments")
             deployments[self._deploy_id] = status
-            state['deployments'] = deployments
+            state["deployments"] = deployments
             txn.update_processing_block_state(self._pb_id, state)
 
     def get_id(self):
@@ -65,7 +65,7 @@ class EEDeploy:
         state = txn.get_processing_block_state(self._pb_id)
         deployments = state.get("deployments")
         if self._deploy_id in deployments:
-            if deployments[self._deploy_id] == 'FINISHED':
+            if deployments[self._deploy_id] == "FINISHED":
                 deployment_lists = txn.list_deployments()
                 if self._deploy_id in deployment_lists:
                     self.remove(self._deploy_id)

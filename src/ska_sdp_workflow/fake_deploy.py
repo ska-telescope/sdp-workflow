@@ -6,7 +6,7 @@ import threading
 
 from .ee_base_deploy import EEDeploy
 
-LOG = logging.getLogger('ska_sdp_workflow')
+LOG = logging.getLogger("ska_sdp_workflow")
 
 
 class FakeDeploy(EEDeploy):
@@ -31,12 +31,25 @@ class FakeDeploy(EEDeploy):
     :type f_args: tuple
 
     """
-    def __init__(self, pb_id, config, deploy_name,
-                 func=None, f_args=None,):
+
+    def __init__(
+        self,
+        pb_id,
+        config,
+        deploy_name,
+        func=None,
+        f_args=None,
+    ):
         super().__init__(pb_id, config)
-        thread = threading.Thread(target=self._deploy,
-                                  args=(deploy_name, func, f_args,),
-                                  daemon=True)
+        thread = threading.Thread(
+            target=self._deploy,
+            args=(
+                deploy_name,
+                func,
+                f_args,
+            ),
+            daemon=True,
+        )
         thread.start()
 
     def _deploy(self, deploy_name, func=None, f_args=None):
@@ -51,10 +64,10 @@ class FakeDeploy(EEDeploy):
 
         """
         LOG.info("Deploying %s Workflow...", deploy_name)
-        self._deploy_id = 'proc-{}-{}'.format(self._pb_id, deploy_name)
-        self.update_deploy_status('RUNNING')
+        self._deploy_id = "proc-{}-{}".format(self._pb_id, deploy_name)
+        self.update_deploy_status("RUNNING")
 
         LOG.info("Starting processing for %fs", *f_args)
         func(*f_args)
-        LOG.info('Finished processing')
-        self.update_deploy_status('FINISHED')
+        LOG.info("Finished processing")
+        self.update_deploy_status("FINISHED")
