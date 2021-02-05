@@ -181,7 +181,7 @@ class ProcessingBlock:
         host = []
         port = []
         for txn in self._config.txn():
-            for chan in channels:
+            for i, chan in enumerate(channels):
                 start = chan.get("start")
 
                 # DNS Based IP addresses
@@ -191,6 +191,7 @@ class ProcessingBlock:
                             [
                                 start,
                                 deploy_id
+                                + "-{}".format(i)
                                 + ".receive."
                                 + os.environ["SDP_HELM_NAMESPACE"]
                                 + ".svc.cluster.local",
