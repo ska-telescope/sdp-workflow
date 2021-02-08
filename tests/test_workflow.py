@@ -9,7 +9,7 @@ import json
 import logging
 import ska_sdp_config
 
-from ska_telmodel.sdp.schema import validate_sdp_receive_addresses
+from ska_telmodel.schema import validate
 from ska_sdp_workflow import workflow
 
 LOG = logging.getLogger('workflow-test')
@@ -51,10 +51,13 @@ def test_buffer_request():
             pb = workflow.ProcessingBlock(pb_id)
             parameters = pb.get_parameters()
             assert parameters['length'] == 10
-            in_buffer_res = pb.request_buffer(100e6, tags=['sdm'])
-            out_buffer_res = pb.request_buffer(parameters['length'] * 6e15 / 3600,
-                                               tags=['visibilities'])
+            in_buffer_res = pb.request_buffer(pb_id + 'in-buff', '500Mi', tags=['sdm'])
+            out_buffer_res = pb.request_buffer('', '',tags=['visibilities'])
             assert in_buffer_res is not None
+            assert type(in_buffer_res).__name__ == 'BufferRequest'
+            assert in_buffer_res.tags[0] == 'sdm'
+            assert in_buffer_res.deployment.type == 'helm'
+            assert in_buffer_res.deployment.args['values']['size'] == '500Mi'
             assert out_buffer_res is not None
 
 
@@ -174,8 +177,8 @@ def test_receive_addresses():
 
     pb_id = 'pb-mvp01-20200425-00000'
     pb = workflow.ProcessingBlock(pb_id)
-    in_buffer_res = pb.request_buffer(100e6, tags=['sdm'])
-    out_buffer_res = pb.request_buffer(10 * 6e15 / 3600, tags=['visibilities'])
+    in_buffer_res = pb.request_buffer('in-sdm', '10Gi', tags=['sdm'])
+    out_buffer_res = pb.request_buffer('out-vis', '10Gi', tags=['visibilities'])
     work_phase = pb.create_phase('Work', [in_buffer_res, out_buffer_res])
 
     with work_phase:
@@ -190,7 +193,8 @@ def test_receive_addresses():
         state = txn.get_processing_block_state(pb_id)
         pb_receive_addresses = state.get('receive_addresses')
         assert pb_receive_addresses == receive_addresses_expected
-        validate_sdp_receive_addresses(3, pb_receive_addresses, 2)
+        validate("https://schema.skatelescope.org/ska-sdp-recvaddrs/0.2",
+        	 pb_receive_addresses)
 
 
 # -----------------------------------------------------------------------------
@@ -209,8 +213,8 @@ def wipe_config_db():
 def create_work_phase(pb_id):
     """Create work phase."""
     pb = workflow.ProcessingBlock(pb_id)
-    in_buffer_res = pb.request_buffer(100e6, tags=['sdm'])
-    out_buffer_res = pb.request_buffer(10 * 6e15 / 3600, tags=['visibilities'])
+    in_buffer_res = pb.request_buffer('in-sdm', '10Gi', tags=['sdm'])
+    out_buffer_res = pb.request_buffer('out-vis', '5Gi', tags=['visibilities'])
     work_phase = pb.create_phase('Work', [in_buffer_res, out_buffer_res])
     return work_phase
 

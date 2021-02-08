@@ -119,22 +119,24 @@ class ProcessingBlock:
 
         return scan_types
 
-    def request_buffer(self, size, tags):
+    def request_buffer(self, name, size, tags):
         """
         Request a buffer reservation.
 
         This returns a buffer reservation request that is used to create a
         workflow phase. These are currently only placeholders.
 
-        :param size: size of the buffer
-        :type size: float
+        :param name: Optional name for the buffer
+        :type name: str
+        :param size: size of buffer in Kubernetes format (eg. 100Mi, 5Gi)
+        :type size: str
         :param tags: tags describing the type of buffer required
         :type tags: list of str
         :returns: buffer reservation request
         :rtype: :class:`BufferRequest`
 
         """
-        return BufferRequest(size, tags)
+        return BufferRequest(name, size, tags, self._config, self._pb_id)
 
     def create_phase(self, name, requests):
         """
