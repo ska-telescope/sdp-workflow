@@ -82,7 +82,7 @@ RECV_ADDRESS = {
             ],
             [
                 2000,
-                "proc-pb-mvp01-20200425-00000-test-receive-1.receive.sdp.svc.cluster.local",
+                "proc-pb-mvp01-20200425-00000-test-receive-0.receive.sdp.svc.cluster.local",
             ],
         ],
         "port": [[0, 9000, 1], [2000, 9000, 1]],
@@ -95,7 +95,7 @@ RECV_ADDRESS = {
             ],
             [
                 2000,
-                "proc-pb-mvp01-20200425-00000-test-receive-1.receive.sdp.svc.cluster.local",
+                "proc-pb-mvp01-20200425-00000-test-receive-0.receive.sdp.svc.cluster.local",
             ],
         ],
         "port": [[0, 9000, 1], [2000, 9000, 1]],

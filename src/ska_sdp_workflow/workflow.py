@@ -215,9 +215,9 @@ class ProcessingBlock:
             channels = scan_type.get("channels")
             host = []
             port = []
-            for chan_num, chan in enumerate(channels):
+            for chan in channels:
                 start = chan.get("start")
-                dns_name = self._generate_dns_name(start, chan_num, chart_name)
+                dns_name = self._generate_dns_name(start, chart_name)
                 host.append(dns_name)
                 port.append([start, 9000, 1])
             receive_addresses[scan_type.get("id")] = dict(host=host, port=port)
@@ -226,11 +226,10 @@ class ProcessingBlock:
         receive_addresses["interface"] = SDP_RECVADDRS + SCHEMA_VERSION
         return receive_addresses
 
-    def _generate_dns_name(self, chan_start, chan_num, chart_name=None):
+    def _generate_dns_name(self, chan_start, chart_name=None):
         """Generate DNS name for the receive processes.
 
         :param chan_start: start of the channel
-        :param chan_num: Incremental number of channel
         :param chart_name: Name of the statefulset
         :return: dns name
 
@@ -246,7 +245,7 @@ class ProcessingBlock:
                     dns_name = [
                         chan_start,
                         self._chart_name
-                        + "-{}.".format(chan_num)
+                        + "-{}.".format(0)
                         + self._service_name
                         + "."
                         + self._namespace
