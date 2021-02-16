@@ -3,7 +3,7 @@
 
 import logging
 
-LOG = logging.getLogger('ska_sdp_workflow')
+LOG = logging.getLogger("ska_sdp_workflow")
 
 
 class BufferRequest:

@@ -5,7 +5,7 @@ import ska_sdp_config
 
 from .ee_base_deploy import EEDeploy
 
-LOG = logging.getLogger('ska_sdp_workflow')
+LOG = logging.getLogger("ska_sdp_workflow")
 
 
 class HelmDeploy(EEDeploy):
@@ -38,17 +38,16 @@ class HelmDeploy(EEDeploy):
 
         """
         LOG.info("Deploying Helm chart: %s", deploy_name)
-        self._deploy_id = 'proc-{}-{}'.format(self._pb_id, deploy_name)
-        self.update_deploy_status('RUNNING')
+        self._deploy_id = "proc-{}-{}".format(self._pb_id, deploy_name)
+        self.update_deploy_status("RUNNING")
 
         chart = {
-            'chart': deploy_name,  # Helm chart deploy from the repo
+            "chart": deploy_name,  # Helm chart deploy from the repo
         }
 
         if values is not None:
-            chart['values'] = values
+            chart["values"] = values
 
-        deploy = ska_sdp_config.Deployment(self._deploy_id,
-                                           "helm", chart)
+        deploy = ska_sdp_config.Deployment(self._deploy_id, "helm", chart)
         for txn in self._config.txn():
             txn.create_deployment(deploy)

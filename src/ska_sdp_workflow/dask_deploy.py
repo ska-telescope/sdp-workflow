@@ -11,7 +11,7 @@ import ska_sdp_config
 
 from .ee_base_deploy import EEDeploy
 
-LOG = logging.getLogger('ska_sdp_workflow')
+LOG = logging.getLogger("ska_sdp_workflow")
 
 
 class DaskDeploy(EEDeploy):
@@ -46,12 +46,18 @@ class DaskDeploy(EEDeploy):
     :type f_args: tuple
     """
 
-    def __init__(self, pb_id, config, deploy_name, n_workers,
-                 func, f_args):
+    def __init__(self, pb_id, config, deploy_name, n_workers, func, f_args):
         super().__init__(pb_id, config)
-        thread = threading.Thread(target=self._deploy,
-                                  args=(deploy_name, n_workers, func, f_args,),
-                                  daemon=True)
+        thread = threading.Thread(
+            target=self._deploy,
+            args=(
+                deploy_name,
+                n_workers,
+                func,
+                f_args,
+            ),
+            daemon=True,
+        )
         thread.start()
 
     def _deploy(self, deploy_name, n_workers, func, f_args):
@@ -67,24 +73,28 @@ class DaskDeploy(EEDeploy):
 
         """
         LOG.info("Deploying Dask...")
-        self._deploy_id = 'proc-{}-{}'.format(self._pb_id, deploy_name)
+        self._deploy_id = "proc-{}-{}".format(self._pb_id, deploy_name)
         LOG.info(self._deploy_id)
 
         # Set Deployment to RUNNING status in the config_db
-        self.update_deploy_status('RUNNING')
+        self.update_deploy_status("RUNNING")
 
         deploy = ska_sdp_config.Deployment(
-            self._deploy_id, "helm", {
-                'chart': 'dask/dask',
-                'values': {
-                    'jupyter.enabled': 'false',
-                    'jupyter.rbac': 'false',
-                    'worker.replicas': n_workers,
+            self._deploy_id,
+            "helm",
+            {
+                "chart": "dask/dask",
+                "values": {
+                    "jupyter.enabled": "false",
+                    "jupyter.rbac": "false",
+                    "worker.replicas": n_workers,
                     # We want to access Dask in-cluster using a DNS name
-                    'scheduler.serviceType': 'ClusterIP',
-                    'worker.image.tag': distributed.__version__,
-                    'scheduler.image.tag': distributed.__version__
-                }})
+                    "scheduler.serviceType": "ClusterIP",
+                    "worker.image.tag": distributed.__version__,
+                    "scheduler.image.tag": distributed.__version__,
+                },
+            },
+        )
 
         for txn in self._config.txn():
             txn.create_deployment(deploy)
@@ -95,8 +105,11 @@ class DaskDeploy(EEDeploy):
         for _ in range(200):
             try:
                 client = distributed.Client(
-                    self._deploy_id + '-scheduler.' +
-                    os.environ['SDP_HELM_NAMESPACE'] + ':8786')
+                    self._deploy_id
+                    + "-scheduler."
+                    + os.environ["SDP_HELM_NAMESPACE"]
+                    + ":8786"
+                )
             except Exception as ex:
                 LOG.error(ex)
         if client is None:
@@ -110,4 +123,4 @@ class DaskDeploy(EEDeploy):
         LOG.info("Computed Result %s", compute_result)
 
         # Update Deployment Status
-        self.update_deploy_status('FINISHED')
+        self.update_deploy_status("FINISHED")
