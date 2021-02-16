@@ -10,7 +10,8 @@ import logging
 from unittest.mock import patch
 import ska_sdp_config
 
-from ska_telmodel.sdp.schema import get_sdp_receive_addresses_schema
+from ska_telmodel.schema import validate
+from ska_telmodel.sdp.version import SDP_RECVADDRS
 from ska_sdp_workflow import workflow
 
 LOG = logging.getLogger("workflow-test")
@@ -19,6 +20,87 @@ LOG.setLevel(logging.DEBUG)
 CONFIG_DB_CLIENT = workflow.new_config_db()
 SUBARRAY_ID = "01"
 MOCK_ENV_VARS = {"SDP_HELM_NAMESPACE": "sdp"}
+SCHEMA_VERSION = "0.2"
+SCAN_TYPES = [
+    {
+        "id": "science_A",
+        "coordinate_system": "ICRS",
+        "ra": "02:42:40.771",
+        "dec": "-00:00:47.84",
+        "channels": [
+            {
+                "count": 744,
+                "start": 0,
+                "stride": 2,
+                "freq_min": 0.35e9,
+                "freq_max": 0.368e9,
+                "link_map": [[0, 0], [200, 1], [744, 2], [944, 3]],
+            },
+            {
+                "count": 744,
+                "start": 2000,
+                "stride": 1,
+                "freq_min": 0.36e9,
+                "freq_max": 0.368e9,
+                "link_map": [[2000, 4], [2200, 5]],
+            },
+        ],
+    },
+    {
+        "id": "calibration_B",
+        "coordinate_system": "ICRS",
+        "ra": "12:29:06.699",
+        "dec": "02:03:08.598",
+        "channels": [
+            {
+                "count": 744,
+                "start": 0,
+                "stride": 2,
+                "freq_min": 0.35e9,
+                "freq_max": 0.368e9,
+                "link_map": [[0, 0], [200, 1], [744, 2], [944, 3]],
+            },
+            {
+                "count": 744,
+                "start": 2000,
+                "stride": 1,
+                "freq_min": 0.36e9,
+                "freq_max": 0.368e9,
+                "link_map": [[2000, 4], [2200, 5]],
+            },
+        ],
+    },
+]
+
+RECV_ADDRESS = {
+    "interface": "https://schema.skatelescope.org/ska-sdp-recvaddrs/0.2",
+    "calibration_B": {
+        "host": [
+            [
+                0,
+                "proc-pb-mvp01-20200425-00000-test-receive-0.receive.sdp.svc.cluster.local",
+            ],
+            [
+                2000,
+                "proc-pb-mvp01-20200425-00000-test-receive-1.receive.sdp.svc.cluster.local",
+            ],
+        ],
+        "port": [[0, 9000, 1], [2000, 9000, 1]],
+    },
+    "science_A": {
+        "host": [
+            [
+                0,
+                "proc-pb-mvp01-20200425-00000-test-receive-0.receive.sdp.svc.cluster.local",
+            ],
+            [
+                2000,
+                "proc-pb-mvp01-20200425-00000-test-receive-1.receive.sdp.svc.cluster.local",
+            ],
+        ],
+        "port": [[0, 9000, 1], [2000, 9000, 1]],
+    },
+}
 
 
 def test_claim_processing_block():
@@ -178,7 +260,6 @@ def test_receive_addresses():
     create_pb_states()
 
     pb_id = "pb-mvp01-20200425-00000"
-    deploy_name = "test-receive"
     pb = workflow.ProcessingBlock(pb_id)
     work_phase = pb.create_phase("Work", [])
 
@@ -190,7 +271,7 @@ def test_receive_addresses():
             sbi_list = txn.list_scheduling_blocks()
             for sbi_id in sbi_list:
 
-                work_phase.ee_deploy_helm(deploy_name)
+                work_phase.ee_deploy_helm("test-receive")
 
                 # Get the channel link map from SBI
                 scan_types = pb.get_scan_types()
@@ -199,7 +280,14 @@ def test_receive_addresses():
                 state = txn.get_processing_block_state(pb_id)
                 pb_receive_addresses = state.get("receive_addresses")
                 assert pb_receive_addresses == receive_addresses_expected
-                get_sdp_receive_addresses_schema(3, True).validate(pb_receive_addresses)
+                validate(SDP_RECVADDRS + SCHEMA_VERSION, pb_receive_addresses, 2)
+
+                # Testing with two channels
+                pb.receive_addresses(SCAN_TYPES)
+                pb_state = txn.get_processing_block_state(pb_id)
+                recv_address = pb_state.get("receive_addresses")
+                assert recv_address == RECV_ADDRESS
+                validate(SDP_RECVADDRS + SCHEMA_VERSION, recv_address, 2)
 
                 # Set scheduling block instance to FINISHED
                 sbi = {"subarray_id": None, "status": "FINISHED"}
@@ -211,6 +299,62 @@ def test_receive_addresses():
         pb_state = txn.get_processing_block_state(pb_id)
         pb_status = pb_state.get("status")
         assert pb_status == "FINISHED"
+
+
+@patch.dict(os.environ, MOCK_ENV_VARS)
+def test_dns_name():
+    """Test generating dns name."""
+
+    # Wipe the config DB
+    wipe_config_db()
+
+    # Create sbi and pb
+    create_sbi_pbi()
+
+    # Create processing block states
+    create_pb_states()
+
+    pb_id = "pb-mvp01-20200425-00000"
+    pb = workflow.ProcessingBlock(pb_id)
+    work_phase = pb.create_phase("Work", [])
+    expected_dns_name = [
+        "test-recv-0.receive.test-sdp.svc.cluster.local",
+        "proc-pb-mvp01-20200425-00000-test-receive-0.receive.sdp.svc.cluster.local",
+    ]
+
+    with work_phase:
+        for txn in CONFIG_DB_CLIENT.txn():
+            sbi_list = txn.list_scheduling_blocks()
+
+            for sbi_id in sbi_list:
+
+                work_phase.ee_deploy_helm("test-receive")
+
+                # Get scan types
+                scan_types = pb.get_scan_types()
+
+                # Testing with just passing scan types
+                pb.receive_addresses(scan_types)
+                state = txn.get_processing_block_state(pb_id)
+                pb_recv_addresses = state.get("receive_addresses")
+                pb_science_host = pb_recv_addresses["science_A"].get("host")
+                assert pb_science_host[0][1] == expected_dns_name[1]
+
+                # Testing with statefulset name, service name and namespace
+                pb.receive_addresses(scan_types, "test-recv", "receive", "test-sdp")
+                state = txn.get_processing_block_state(pb_id)
+                pb_receive_addresses = state.get("receive_addresses")
+                pb_cal_host = pb_receive_addresses["calibration_B"].get("host")
+                assert pb_cal_host[0][1] == expected_dns_name[0]
+
+                # Set scheduling block instance to FINISHED
+                sbi_state = txn.get_scheduling_block(sbi_id)
+                sbi_state.update({"subarray_id": None, "status": "FINISHED"})
+                txn.update_scheduling_block(sbi_id, sbi_state)
+
+    for txn in CONFIG_DB_CLIENT.txn():
+        pb_state = txn.get_processing_block_state(pb_id)
+        assert pb_state.get("status") == "FINISHED"
 
 
 # -----------------------------------------------------------------------------
