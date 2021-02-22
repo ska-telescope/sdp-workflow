@@ -324,17 +324,15 @@ def test_dns_name():
 
     with work_phase:
         for txn in CONFIG_DB_CLIENT.txn():
-            sbi_list = txn.list_scheduling_blocks()
 
-            for sbi_id in sbi_list:
-
-                work_phase.ee_deploy_helm("test-receive")
+            for sbi_id in txn.list_scheduling_blocks():
+                ee_receive = work_phase.ee_deploy_helm("test-receive")
 
                 # Get scan types
                 scan_types = pb.get_scan_types()
 
                 # Testing with just passing scan types
-                pb.receive_addresses(scan_types)
+                pb.receive_addresses(scan_types, chart_name=ee_receive.get_id())
                 state = txn.get_processing_block_state(pb_id)
                 pb_recv_addresses = state.get("receive_addresses")
                 pb_science_host = pb_recv_addresses["science_A"].get("host")

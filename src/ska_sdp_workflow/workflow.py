@@ -234,22 +234,24 @@ class ProcessingBlock:
         :return: dns name
 
         """
-        for txn in self._config.txn():
-            for deploy_id in txn.list_deployments():
-                if self._pb_id in deploy_id:
-                    if chart_name is not None:
-                        self._chart_name = chart_name
-                    else:
-                        self._chart_name = deploy_id
 
-                    dns_name = [
-                        chan_start,
-                        self._chart_name
-                        + "-{}.".format(0)
-                        + self._service_name
-                        + "."
-                        + self._namespace
-                        + ".svc.cluster.local",
-                    ]
+        if chart_name is not None:
+            self._chart_name = chart_name
+        else:
+            for txn in self._config.txn():
+                for deploy_id in txn.list_deployments():
+                    if self._pb_id in deploy_id:
+                        if "-receive" in deploy_id:
+                            self._chart_name = deploy_id
+
+        dns_name = [
+            chan_start,
+            self._chart_name
+            + "-{}.".format(0)
+            + self._service_name
+            + "."
+            + self._namespace
+            + ".svc.cluster.local",
+        ]
 
         return dns_name
