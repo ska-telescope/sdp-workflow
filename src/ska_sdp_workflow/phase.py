@@ -154,6 +154,7 @@ class Phase:
         self._deploy = HelmDeploy(self._pb_id, self._config, deploy_name, values)
         deploy_id = self._deploy.get_id()
         self._deploy_id_list.append(deploy_id)
+        return self._deploy
 
     def ee_deploy_dask(self, name, n_workers, func, f_args):
         """
