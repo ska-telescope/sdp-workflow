@@ -111,14 +111,8 @@ publish:
 # CI metrics
 # ============================================================================
 
-create_ci_metrics:
-  stage: .post
-  when: always
-  script:
-    # Gitlab CI badges creation: START
-    - curl -s https://gitlab.com/ska-telescope/ci-metrics-utilities/raw/master/scripts/ci-badges-func.sh | sh
-    # Gitlab CI badges creation: END
-  artifacts:
-    paths:
-      - build
-    expire_in: 1 week
+# Create Gitlab CI badges from CI metrics
+# https://developer.skatelescope.org/en/latest/tools/continuousintegration.html#automated-collection-of-ci-health-metrics-as-part-of-the-ci-pipeline
+include:
+  - project: 'ska-telescope/templates-repository'
+    file: 'gitlab-ci/includes/post_step.yml'
