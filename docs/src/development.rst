@@ -3,7 +3,7 @@ Workflow development
 
 The steps to develop and test an SDP workflow as follows:
 
-- Clone the sdp-workflows-procfunc repository from GitLab and create a new branch for
+- Clone the ska-sdp-science-pipelines repository from GitLab and create a new branch for
   your work.
 
 - Create a directory for your workflow in ``src/workflows``:
@@ -61,6 +61,17 @@ The steps to develop and test an SDP workflow as follows:
   This will add it to your local Docker daemon where it can be used for testing
   with a local deployment of the SDP.
 
+  For example with a local installation of ``minikube``
+  
+  .. code-block::
+  
+     $ eval $(minikube -p minikube docker-env)
+     $ make build
+     $ make tag_release
+     
+  This will point Docker towards the ``minikube`` Docker repository and will then build and
+  tag the new workflow accordingly.
+
 - Add your workflow to the GitLab CI file (``.gitlab-ci.yml``) in the root of the
   repository. This will enable the Docker image to be built and pushed to the
   EngageSKA repository when it is merged into the master branch.
@@ -77,7 +88,7 @@ The steps to develop and test an SDP workflow as follows:
 
     $ helm repo add ska https://nexus.engageska-portugal.pt/repository/helm-chart
     $ helm install test ska/sdp \
-    --set proccontrol.workflows.url=https://gitlab.com/ska-telescope/sdp-workflows-procfunc/-/raw/<my-branch>/workflows.json
+    --set proccontrol.workflows.url=https://gitlab.com/ska-telescope/ska-sdp-science-pipelines/-/raw/<my-branch>/workflows.json
 
 - Then create a processing block to run the workflow, either via the Tango
   interface, or by creating it directly in the config DB with ``sdpcfg``.
