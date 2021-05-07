@@ -17,7 +17,7 @@ with open(VERSION_PATH, "r") as file:
 
 
 def requirements_from(fname):
-    """ Read requirements from a file. """
+    """Read requirements from a file."""
     with open(fname) as req_file:
         return [req for req in req_file.read().splitlines() if req[0] != "-"]
 
