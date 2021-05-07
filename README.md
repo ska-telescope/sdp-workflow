@@ -15,3 +15,23 @@ Please make sure you black-formatted your code before merging to master.
 The first step in the CI pipeline checks that the code complies with black formatting style,
 
 and will fail if that is not the case.
+
+
+## Releasing the python package
+
+When new release is ready:
+
+  - check out master
+  - update CHANGELOG.md
+  - update setup.cfg [bumpver]: tag = True
+  - commit changes
+  - make release-[patch||minor||major]
+  - update setup.cfg [bumpver]: tag = False
+  - commit changes
+  - make patch-beta
+
+Note: bumpver needs to be installed
+
+The CI pipeline will trigger on every push, but will only publish artifacts when "tag = True" in setup.cfg.
+    
+
