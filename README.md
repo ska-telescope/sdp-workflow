@@ -23,6 +23,7 @@ When new release is ready:
 
   - check out master
   - update CHANGELOG.md
+  - commit changes
   - make release-[patch||minor||major]
 
 Note: bumpver needs to be installed
