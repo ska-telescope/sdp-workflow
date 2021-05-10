@@ -1,12 +1,9 @@
 
-release-patch:
-    bumpver update -n --tag final
+release-patch:  ## Patch release; -n --> do not synchronize tags from git
+    bumpver update --patch -n
 
-release-minor:
-    bumpver update --minor -n --tag final
+release-minor:  ## Minor release; -n --> do not synchronize tags from git
+    bumpver update --minor -n
 
-release-major:
-    bumpver update --major -n --tag final
-
-patch-beta:
-    bumpver update --patch --tag beta -n
+release-major:  ## Major release; -n --> do not synchronize tags from git
+    bumpver update --major -n
