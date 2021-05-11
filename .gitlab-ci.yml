@@ -94,7 +94,10 @@ build_release:
   script:
     - python3 setup.py sdist bdist_wheel
   only:
-    - tags
+    variables:
+       - $CI_COMMIT_MESSAGE =~ /^.+$/ # Confirm tag message exists
+       - $CI_COMMIT_TAG =~ /^((([0-9]+)\.([0-9]+)\.([0-9]+)(?:-([0-9a-zA-Z-]+(?:\.[0-9a-zA-Z-]+)*))?)(?:\+([0-9a-zA-Z-]+(?:\.[0-9a-zA-Z-]+)*))?)$/ #Confirm semantic versioning of tag
+
 
 # ============================================================================
 # Publish Python package (master only)
