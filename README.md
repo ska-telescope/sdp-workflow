@@ -15,3 +15,15 @@ Please make sure you black-formatted your code before merging to master.
 The first step in the CI pipeline checks that the code complies with black formatting style,
 
 and will fail if that is not the case.
+
+
+## Releasing the python package
+
+When new release is ready:
+
+  - check out master
+  - update CHANGELOG.md
+  - commit changes
+  - make release-[patch||minor||major]
+
+Note: bumpver needs to be installed
