@@ -1,5 +1,5 @@
 release-patch: ## Patch release; -n --> do not synchronize tags from git
-	bumpver update --patch -n
+	bumpver update --patch
 
 release-minor: ## Minor release; -n --> do not synchronize tags from git
 	bumpver update --minor -n
