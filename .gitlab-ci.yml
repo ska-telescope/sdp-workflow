@@ -91,6 +91,8 @@ build_dev:
 
 build_release:
   extends: .build_python
+  tags:
+  - docker-executor
   script:
     - python3 setup.py sdist bdist_wheel
   only:
