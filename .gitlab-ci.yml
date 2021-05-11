@@ -84,7 +84,7 @@ build_dev:
   script:
     - python3 setup.py egg_info -b+dev.$CI_COMMIT_SHORT_SHA sdist bdist_wheel
   rules:
-    - if: '$CI_COMMIT_TAG == null && $CI_COMMIT_TAG == ""'
+    - if: '$CI_COMMIT_TAG == null || $CI_COMMIT_TAG == ""'
 
 # Executed on a master commit
 
