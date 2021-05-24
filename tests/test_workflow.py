@@ -11,7 +11,7 @@ from unittest.mock import patch
 import ska_sdp_config
 
 from ska_telmodel.schema import validate
-from ska_telmodel.sdp.version import SDP_RECVADDRS
+from ska_telmodel.sdp.version import SDP_RECVADDRS_PREFIX
 from ska_sdp_workflow import workflow
 
 LOG = logging.getLogger("workflow-test")
@@ -280,14 +280,14 @@ def test_receive_addresses():
                 state = txn.get_processing_block_state(pb_id)
                 pb_receive_addresses = state.get("receive_addresses")
                 assert pb_receive_addresses == receive_addresses_expected
-                validate(SDP_RECVADDRS + SCHEMA_VERSION, pb_receive_addresses, 2)
+                validate(SDP_RECVADDRS_PREFIX + SCHEMA_VERSION, pb_receive_addresses, 2)
 
                 # Testing with two channels
                 pb.receive_addresses(SCAN_TYPES)
                 pb_state = txn.get_processing_block_state(pb_id)
                 recv_address = pb_state.get("receive_addresses")
                 assert recv_address == RECV_ADDRESS
-                validate(SDP_RECVADDRS + SCHEMA_VERSION, recv_address, 2)
+                validate(SDP_RECVADDRS_PREFIX + SCHEMA_VERSION, recv_address, 2)
 
                 # Set scheduling block instance to FINISHED
                 sbi = {"subarray_id": None, "status": "FINISHED"}
