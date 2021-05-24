@@ -8,7 +8,7 @@ import sys
 import ska.logging
 import ska_sdp_config
 
-from ska_telmodel.sdp.version import SDP_RECVADDRS
+from ska_telmodel.sdp.version import SDP_RECVADDRS_PREFIX
 
 from .phase import Phase
 from .buffer_request import BufferRequest
@@ -223,7 +223,7 @@ class ProcessingBlock:
             receive_addresses[scan_type.get("id")] = dict(host=host, port=port)
 
         # Add schema interface
-        receive_addresses["interface"] = SDP_RECVADDRS + SCHEMA_VERSION
+        receive_addresses["interface"] = SDP_RECVADDRS_PREFIX + SCHEMA_VERSION
         return receive_addresses
 
     def _generate_dns_name(self, chan_start, chart_name=None):
