@@ -1,0 +1,13 @@
+{
+  "interface": "https://schema.skatelescope.org/ska-sdp-recvaddrs/0.2",
+  "calibration_B": {
+    "host": [[0, "proc-pb-mvp01-20200425-00000-test-receive-0.receive.sdp.svc.cluster.local"],
+    [2000, "proc-pb-mvp01-20200425-00000-test-receive-1.receive.sdp.svc.cluster.local"]],
+    "port": [[0, 41000, 1, 0], [0, 41001, 1, 1], [2000, 41000, 1, 0], [2000, 41001, 1, 1]]
+  },
+  "science_A": {
+    "host": [[0, "proc-pb-mvp01-20200425-00000-test-receive-0.receive.sdp.svc.cluster.local"],
+      [2000, "proc-pb-mvp01-20200425-00000-test-receive-1.receive.sdp.svc.cluster.local"]],
+    "port": [[0, 41000, 1, 0], [0, 41001, 1, 1], [2000, 41000, 1, 0], [2000, 41001, 1, 1]]
+  }
+}
