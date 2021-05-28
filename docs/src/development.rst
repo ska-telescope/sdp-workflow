@@ -73,7 +73,7 @@ The steps to develop and test an SDP workflow as follows:
   tag the new workflow accordingly.
 
 - `Deploy SDP locally <https://developer.skao.int/projects/ska-sdp-integration/en/latest/running/standalone.html>`_
-and `start the console pod <https://developer.skao.int/projects/ska-sdp-integration/en/latest/running/standalone.html#connecting-to-the-configuration-database>`_.
+  and `start the console pod <https://developer.skao.int/projects/ska-sdp-integration/en/latest/running/standalone.html#connecting-to-the-configuration-database>`_.
 
 - Create or import the new workflow into the Configuration DB:
 
@@ -85,12 +85,21 @@ and `start the console pod <https://developer.skao.int/projects/ska-sdp-integrat
 
     ska-sdp import my-workflow.json
 
-- Use import if you have multiple workflows to add to the dB. Example JSON file for importing workflows can be found at:
-`Example Workflow JSON <https://developer.skao.int/projects/ska-sdp-config/en/latest/cli.html#example-workflow-definitions-file-content-for-import>`_
+  `<type>`: batch or realtime, depending on your workflow type
+
+  `<name>`: name of your workflow
+
+  `<version>`: version of your workflow
+
+  `<docker image>`: docker image you just built from your workflow.
+
+  Use import if you have multiple workflows to add to the dB. Example JSON file for
+  importing workflows can be found at:
+  `Example Workflow JSON <https://developer.skao.int/projects/ska-sdp-config/en/latest/cli.html#example-workflow-definitions-file-content-for-import>`_
 
 - Then create a processing block to run the workflow, either via the `Tango
   interface <https://developer.skao.int/projects/ska-sdp-integration/en/latest/running/standalone.html#accessing-the-tango-interface>`_,
-  or by creating it directly in the config DB with `ska-sdp <https://developer.skao.int/projects/ska-sdp-config/en/latest/cli.html#cli-to-interact-with-sdp>`_.
+  or by creating it directly in the config DB with `ska-sdp create pb <https://developer.skao.int/projects/ska-sdp-config/en/latest/cli.html#cli-to-interact-with-sdp>`_.
 
 - Once happy with the workflow, add it to the GitLab CI file (``.gitlab-ci.yml``) in the root of the
   repository. This will enable the Docker image to be built and pushed to the
