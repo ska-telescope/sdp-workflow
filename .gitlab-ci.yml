@@ -43,7 +43,8 @@ lint:
   script:
     - pylint --exit-zero --output-format=parseable src/ska_sdp_workflow
     - pylint --exit-zero --output-format=pylint2junit.JunitReporter src/ska_sdp_workflow > linting.xml
-    - black --check . # fails if any of the code doesn't comply to black formatting
+    - black -v --check . # fails if any of the code doesn't comply to black formatting
+
   after_script:
     - mkdir -p build/reports
     - mv linting.xml build/reports

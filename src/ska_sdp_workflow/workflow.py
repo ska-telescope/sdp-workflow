@@ -182,6 +182,19 @@ class ProcessingBlock:
         LOG.info("Closing connection to config DB")
         self._config.close()
 
+    def nested_parameters(self, parameters):
+        """Convert flattened dictionary to nested dictionary.
+
+        :param parameters: parameters to be converted
+
+        :return: nested parameters
+        """
+
+        result = {}
+        for keys, values in parameters.items():
+            self._split_rec(keys, values, result)
+        return result
+
     # -------------------------------------
     # Private methods
     # -------------------------------------
@@ -255,3 +268,16 @@ class ProcessingBlock:
         ]
 
         return dns_name
+
+    def _split_rec(self, keys, values, out):
+        """Splitting keys in dictionary using recursive approach.
+
+        :param keys: keys from the dictionary
+        :param values: values from the dictionary
+        :param out: output result
+        """
+        keys, *rest = keys.split(".", 1)
+        if rest:
+            self._split_rec(rest[0], values, out.setdefault(keys, {}))
+        else:
+            out[keys] = values

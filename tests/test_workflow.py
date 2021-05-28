@@ -9,6 +9,7 @@ import json
 import logging
 from unittest.mock import patch
 import ska_sdp_config
+import yaml
 
 from ska_telmodel.schema import validate
 from ska_telmodel.sdp.version import SDP_RECVADDRS_PREFIX
@@ -100,6 +101,22 @@ RECV_ADDRESS = {
         ],
         "port": [[0, 9000, 1], [2000, 9000, 1]],
     },
+}
+
+VALUES = {
+    "image": "nexus.engageska-portugal.pt/sdp-prototype",
+    "version": "latest",
+    "recv_emu": "emu-recv",
+    "model.name": "sim-vis.ms",
+    "transmission.channels_per_stream": 4,
+    "transmission.rate": "147500",
+    "payload.method": "icd",
+    "results.push": False,
+    "pvc.name": "local-pvc",
+    "pvc.path": "/mnt/data",
+    "reception.outputfilename": "output.ms",
+    "reception.receiver_port_start": "9000",
+    "reception.num_ports": 1,
 }
 
 
@@ -261,6 +278,13 @@ def test_receive_addresses():
 
     pb_id = "pb-mvp01-20200425-00000"
     pb = workflow.ProcessingBlock(pb_id)
+
+    # Update values with number of process
+    VALUES["replicas"] = 1
+
+    # Convert flatten dictionary to nested dictionary
+    assert pb.nested_parameters(VALUES) == read_parameters("values.yaml")
+
     work_phase = pb.create_phase("Work", [])
 
     # Get the expected receive addresses from the data file
@@ -271,7 +295,7 @@ def test_receive_addresses():
             sbi_list = txn.list_scheduling_blocks()
             for sbi_id in sbi_list:
 
-                work_phase.ee_deploy_helm("test-receive")
+                work_phase.ee_deploy_helm("test-receive", pb.nested_parameters(VALUES))
 
                 # Get the channel link map from SBI
                 scan_types = pb.get_scan_types()
@@ -450,6 +474,18 @@ def read_configuration_string():
 def read_receive_addresses():
     """Read receive addresses from JSON file."""
     return read_json_data("receive_addresses.json", decode=True)
+
+
+def read_parameters(filename):
+    """Read parameters from yaml file.
+
+    :param filename: values filename
+
+    """
+    path = os.path.join(os.path.dirname(__file__), "data", filename)
+    with open(path, "r") as data:
+        expected_yaml = yaml.load(data)
+    return expected_yaml
 
 
 def read_json_data(filename, decode=False):
