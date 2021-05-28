@@ -72,7 +72,27 @@ The steps to develop and test an SDP workflow as follows:
   This will point Docker towards the ``minikube`` Docker repository and will then build and
   tag the new workflow accordingly.
 
-- Add your workflow to the GitLab CI file (``.gitlab-ci.yml``) in the root of the
+- `Deploy SDP locally <https://developer.skao.int/projects/ska-sdp-integration/en/latest/running/standalone.html>`_
+and `start the console pod <https://developer.skao.int/projects/ska-sdp-integration/en/latest/running/standalone.html#connecting-to-the-configuration-database>`_.
+
+- Create or import the new workflow into the Configuration DB:
+
+  .. code-block::
+
+    ska-sdp create workflow <type>:<name>:<version> '{"image": <docker image>}'
+
+  .. code-block::
+
+    ska-sdp import my-workflow.json
+
+- Use import if you have multiple workflows to add to the dB. Example JSON file for importing workflows can be found at:
+`Example Workflow JSON <https://developer.skao.int/projects/ska-sdp-config/en/latest/cli.html#example-workflow-definitions-file-content-for-import>`_
+
+- Then create a processing block to run the workflow, either via the `Tango
+  interface <https://developer.skao.int/projects/ska-sdp-integration/en/latest/running/standalone.html#accessing-the-tango-interface>`_,
+  or by creating it directly in the config DB with `ska-sdp <https://developer.skao.int/projects/ska-sdp-config/en/latest/cli.html#cli-to-interact-with-sdp>`_.
+
+- Once happy with the workflow, add it to the GitLab CI file (``.gitlab-ci.yml``) in the root of the
   repository. This will enable the Docker image to be built and pushed to the
   EngageSKA repository when it is merged into the master branch.
 
@@ -80,15 +100,3 @@ The steps to develop and test an SDP workflow as follows:
   ``src/workflows/workflows.json``.
 
 - Commit the changes to your branch and push to GitLab.
-
-- You can then test the workflow by starting SDP with the processing
-  controller workflows URL pointing to your branch in GitLab:
-
-  .. code-block::
-
-    $ helm repo add ska https://nexus.engageska-portugal.pt/repository/helm-chart
-    $ helm install test ska/sdp \
-    --set proccontrol.workflows.url=https://gitlab.com/ska-telescope/ska-sdp-science-pipelines/-/raw/<my-branch>/workflows.json
-
-- Then create a processing block to run the workflow, either via the Tango
-  interface, or by creating it directly in the config DB with ``sdpcfg``.
