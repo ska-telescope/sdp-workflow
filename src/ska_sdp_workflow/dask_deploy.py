@@ -85,13 +85,16 @@ class DaskDeploy(EEDeploy):
             {
                 "chart": "dask/dask",
                 "values": {
-                    "jupyter.enabled": "false",
-                    "jupyter.rbac": "false",
-                    "worker.replicas": n_workers,
-                    # We want to access Dask in-cluster using a DNS name
-                    "scheduler.serviceType": "ClusterIP",
-                    "worker.image.tag": distributed.__version__,
-                    "scheduler.image.tag": distributed.__version__,
+                    "jupyter": {"enabled": "false", "rbac": "false"},
+                    "scheduler": {
+                        # We want to access Dask in-cluster using a DNS name
+                        "serviceType": "ClusterIP",
+                        "image": {"tag": distributed.__version__},
+                    },
+                    "worker": {
+                        "replicas": n_workers,
+                        "image": {"tag": distributed.__version__},
+                    },
                 },
             },
         )
