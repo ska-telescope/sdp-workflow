@@ -81,3 +81,9 @@ Once the SDP workflow library have been installed, use:
 .. code-block::
 
   import ska_sdp_workflow
+
+Develop a new workflow
+----------------------
+
+The steps to develop and test an SDP workflow can be found at
+`Science Pipelines - Workflow Development <https://developer.skao.int/projects/ska-sdp-science-pipelines/en/latest/workflow_development.html>`_.
