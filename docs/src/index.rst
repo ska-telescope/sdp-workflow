@@ -10,9 +10,7 @@ the low-level interfaces such as the SDP configuration library.
   :maxdepth: 1
 
   introduction
-  development
   api
-  examples
   port_configuration
 
 
