@@ -1,5 +1,5 @@
 {
-  "interface": "https://schema.skatelescope.org/ska-sdp-recvaddrs/0.2",
+  "interface": "https://schema.skao.int/ska-sdp-recvaddrs/0.2",
   "calibration_B": {
     "host": [[0, "proc-pb-mvp01-20200425-00000-test-receive-0.receive.sdp.svc.cluster.local"],
     [2000, "proc-pb-mvp01-20200425-00000-test-receive-1.receive.sdp.svc.cluster.local"]],

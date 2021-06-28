@@ -74,7 +74,7 @@ SCAN_TYPES = [
 ]
 
 RECV_ADDRESS = {
-    "interface": "https://schema.skatelescope.org/ska-sdp-recvaddrs/0.2",
+    "interface": "https://schema.skao.int/ska-sdp-recvaddrs/0.2",
     "calibration_B": {
         "host": [
             [

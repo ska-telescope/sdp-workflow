@@ -26,6 +26,7 @@ autodoc_mock_imports = [
     "distributed",
     "ska",
     "ska_sdp_config",
+    "ska_telmodel",
 ]
 
 
