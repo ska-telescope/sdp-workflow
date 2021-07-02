@@ -1,6 +1,8 @@
 """High-level API for SKA SDP workflows."""
 # pylint: disable=invalid-name
 # pylint: disable=no-self-use
+# pylint: disable=too-many-instance-attributes
+# pylint: disable=too-many-locals
 
 import logging
 import os
@@ -69,8 +71,15 @@ class ProcessingBlock:
         self._chart_name = None
         self._namespace = None
 
+        # Ports
+        self._ports = []
+
     def receive_addresses(
-        self, scan_types, chart_name=None, service_name=None, namespace=None
+        self,
+        chart_name=None,
+        service_name=None,
+        namespace=None,
+        configured_host_port=None,
     ):
         """
         Generate receive addresses and update the processing block state.
@@ -79,13 +88,13 @@ class ProcessingBlock:
         :param chart_name: Name of the statefulset
         :param service_name: Name of the headless service
         :param namespace: namespace where its going to be deployed
-        :type scan_types: list
+        :param configured_host_port: constructed host and port
 
         """
         # Generate receive addresses
         LOG.info("Generating receive addresses")
-        receive_addresses = self._generate_receive_addresses(
-            scan_types, chart_name, service_name, namespace
+        receive_addresses = self._update_receive_addresses(
+            chart_name, service_name, namespace, configured_host_port
         )
 
         # Update receive addresses in processing block state
@@ -176,6 +185,70 @@ class ProcessingBlock:
             name, requests, self._config, self._pb_id, self._sbi_id, workflow_type
         )
 
+    def configure_recv_processes_ports(
+        self, scan_types, max_channels_per_process, port_start, channels_per_port
+    ):
+        """Calculate how many receive process(es) and ports are required.
+
+        :param scan_types: scan types from SBI
+        :param max_channels_per_process: maximum number of channels per process
+        :param port_start: starting port the receiver will be listening in
+        :param channels_per_port: number of channels to be sent to each port
+        :returns: configured host and port
+        :rtype: dict
+
+        """
+        # Initial variables
+        port_count = 0
+        configured_host_port = {}
+
+        # Number of receive process
+        num_process = 0
+
+        # Total process to deployed
+        total_process = 0
+
+        for scan_type in scan_types:
+            # Initial variables
+            hosts = []
+            ports = []
+            prev_count = 0
+            process_per_channel = 0
+            entry = True
+
+            for chan in scan_type.get("channels"):
+                start = chan.get("start")
+                prev_count = prev_count + chan.get("count")
+                for i in range(0, chan.get("count"), max_channels_per_process):
+                    if entry:
+                        prev_count = prev_count + chan.get("count")
+                        num_process = 1
+                        entry = False
+                    else:
+                        prev_count = prev_count + chan.get("count")
+                        if prev_count >= max_channels_per_process:
+                            process_per_channel += 1
+                            num_process += process_per_channel
+                        if i == 0:
+                            prev_count = 0
+
+                    hosts.append(self._construct_host(start, process_per_channel))
+                    if channels_per_port > 1:
+                        for j in range(0, channels_per_port):
+                            ports.append([start, port_start + j, 1, port_count])
+                            port_count += 1
+                    else:
+                        ports.append([start, port_start, 1])
+                    port_count = 0
+                    start = start + max_channels_per_process
+
+            if num_process > total_process:
+                total_process = num_process
+
+            configured_host_port[scan_type.get("id")] = dict(host=hosts, port=ports)
+
+        return configured_host_port, total_process
+
     def exit(self):
         """Close connection to the configuration."""
 
@@ -199,18 +272,31 @@ class ProcessingBlock:
     # Private methods
     # -------------------------------------
 
-    def _generate_receive_addresses(
-        self, scan_types, chart_name=None, service_name=None, namespace=None
+    def _construct_host(self, chan_start, num_process):
+        """Construct a template of the host address.
+
+        :param chan_start: start of the channel
+        :param num_process: number of receive process
+        :return: constructed host address
+
+        """
+        host = [chan_start, "-{}.".format(num_process)]
+        return host
+
+    def _update_receive_addresses(
+        self,
+        chart_name=None,
+        service_name=None,
+        namespace=None,
+        configured_host_port=None,
     ):
         """
         Generate receive addresses for all scan types.
 
-        This function generates a minimal fake response.
-
-        :param scan_types: scan types from SBI
         :param chart_name: Name of the statefulset
         :param service_name: Name of the headless service
         :param namespace: namespace where its going to be deployed
+        :param configured_host_port: configured host and port
         :return: receive addresses
 
         """
@@ -224,26 +310,18 @@ class ProcessingBlock:
         else:
             self._namespace = os.environ["SDP_HELM_NAMESPACE"]
 
-        for scan_type in scan_types:
-            channels = scan_type.get("channels")
-            host = []
-            port = []
-            for chan in channels:
-                start = chan.get("start")
-                dns_name = self._generate_dns_name(start, chart_name)
-                host.append(dns_name)
-                port.append([start, 9000, 1])
-            receive_addresses[scan_type.get("id")] = dict(host=host, port=port)
+        receive_addresses = self._generate_dns_name(configured_host_port, chart_name)
 
         # Add schema interface
         receive_addresses["interface"] = SDP_RECVADDRS_PREFIX + SCHEMA_VERSION
         return receive_addresses
 
-    def _generate_dns_name(self, chan_start, chart_name=None):
+    def _generate_dns_name(self, configured_host_port, chart_name=None):
         """Generate DNS name for the receive processes.
 
         :param chan_start: start of the channel
         :param chart_name: Name of the statefulset
+        :param configured_host_port: constructed host and port
         :return: dns name
 
         """
@@ -257,17 +335,19 @@ class ProcessingBlock:
                         if "-receive" in deploy_id:
                             self._chart_name = deploy_id
 
-        dns_name = [
-            chan_start,
-            self._chart_name
-            + "-{}.".format(0)
-            + self._service_name
-            + "."
-            + self._namespace
-            + ".svc.cluster.local",
-        ]
+        for values in configured_host_port.values():
+            for host in values["host"]:
+                dns_name = (
+                    self._chart_name
+                    + host[1]
+                    + self._service_name
+                    + "."
+                    + self._namespace
+                    + ".svc.cluster.local"
+                )
+                host[1] = dns_name
 
-        return dns_name
+        return configured_host_port
 
     def _split_rec(self, keys, values, out):
         """Splitting keys in dictionary using recursive approach.
