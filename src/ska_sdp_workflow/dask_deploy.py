@@ -79,21 +79,25 @@ class DaskDeploy(EEDeploy):
         # Set Deployment to RUNNING status in the config_db
         self.update_deploy_status("RUNNING")
 
+        # Hack for mismatch between formats of dask/distributed package version
+        # numbers (e.g. 2021.06.2) and docker image tags (e.g. 2021.6.2).
+        tag = distributed.__version__.replace(".0", ".")
+
         deploy = ska_sdp_config.Deployment(
             self._deploy_id,
             "helm",
             {
                 "chart": "dask/dask",
                 "values": {
-                    "jupyter": {"enabled": "false", "rbac": "false"},
+                    "jupyter": {"enabled": False, "rbac": False},
                     "scheduler": {
                         # We want to access Dask in-cluster using a DNS name
                         "serviceType": "ClusterIP",
-                        "image": {"tag": distributed.__version__},
+                        "image": {"tag": tag},
                     },
                     "worker": {
                         "replicas": n_workers,
-                        "image": {"tag": distributed.__version__},
+                        "image": {"tag": tag},
                     },
                 },
             },
