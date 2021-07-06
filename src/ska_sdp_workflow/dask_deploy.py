@@ -1,6 +1,8 @@
 """Dask execution engine deployment module."""
 # pylint: disable=too-many-arguments
 # pylint: disable=broad-except
+# pylint: disable=invalid-name
+# pylint: disable=no-self-use
 
 import os
 import sys
@@ -72,6 +74,7 @@ class DaskDeploy(EEDeploy):
         :param n_workers: number of dask workers
 
         """
+
         LOG.info("Deploying Dask...")
         self._deploy_id = "proc-{}-{}".format(self._pb_id, deploy_name)
         LOG.info(self._deploy_id)
@@ -80,27 +83,20 @@ class DaskDeploy(EEDeploy):
         self.update_deploy_status("RUNNING")
 
         # Hack for mismatch between formats of dask/distributed package version
-        # numbers (e.g. 2021.06.2) and docker image tags (e.g. 2021.6.2).
-        tag = distributed.__version__.replace(".0", ".")
+        # Getting image from config db through the pb type, id and version
+        for txn in self._config.txn():
+            pb = txn.get_processing_block(self._pb_id)
+            wf_image = txn.get_workflow(
+                pb.workflow["type"], pb.workflow["id"], pb.workflow["version"]
+            )
+
+        values = {"worker.replicas": n_workers}
+        values.update(wf_image)
 
         deploy = ska_sdp_config.Deployment(
             self._deploy_id,
             "helm",
-            {
-                "chart": "dask/dask",
-                "values": {
-                    "jupyter": {"enabled": False, "rbac": False},
-                    "scheduler": {
-                        # We want to access Dask in-cluster using a DNS name
-                        "serviceType": "ClusterIP",
-                        "image": {"tag": tag},
-                    },
-                    "worker": {
-                        "replicas": n_workers,
-                        "image": {"tag": tag},
-                    },
-                },
-            },
+            {"chart": "dask", "values": values},
         )
 
         for txn in self._config.txn():
