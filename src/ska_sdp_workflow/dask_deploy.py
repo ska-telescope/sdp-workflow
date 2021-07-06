@@ -84,6 +84,7 @@ class DaskDeploy(EEDeploy):
 
         # Hack for mismatch between formats of dask/distributed package version
         # Getting image from config db through the pb type, id and version
+        wf_image = None
         for txn in self._config.txn():
             pb = txn.get_processing_block(self._pb_id)
             wf_image = txn.get_workflow(
@@ -91,7 +92,8 @@ class DaskDeploy(EEDeploy):
             )
 
         values = {"worker.replicas": n_workers}
-        values.update(wf_image)
+        if wf_image is not None:
+            values.update(wf_image)
 
         deploy = ska_sdp_config.Deployment(
             self._deploy_id,
