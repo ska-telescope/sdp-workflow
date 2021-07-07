@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.2.4
+
+* Bug fixed. Fixed boolean flags in the chart values. Updated to use 
+  workflow docker image itself for the scheduler and workers to 
+  guarantee that the dask and distributed versions will match.
+
 ## 0.2.3
 
 * Updated with the missing functionalities for multiple receive process and
