@@ -4,4 +4,3 @@ distributed
 ska-logging >= 0.3.0
 ska-sdp-config >= 0.1.1
 ska-telescope-model
-bumpver
