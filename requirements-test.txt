@@ -1,6 +1,6 @@
+black
 pylint2junit
 pytest
 pytest-cov
 pytest-pylint
 pytest-runner
-ska-telescope-model

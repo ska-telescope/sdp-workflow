@@ -7,7 +7,7 @@
 import logging
 import os
 import sys
-import ska.logging
+import ska_ser_logging
 import ska_sdp_config
 
 from ska_telmodel.sdp.version import SDP_RECVADDRS_PREFIX
@@ -21,7 +21,7 @@ FEATURE_CONFIG_DB = FeatureToggle("config_db", True)
 SCHEMA_VERSION = "0.2"
 
 # Initialise logging
-ska.logging.configure_logging()
+ska_ser_logging.configure_logging()
 LOG = logging.getLogger("ska_sdp_workflow")
 LOG.setLevel(logging.DEBUG)
 
