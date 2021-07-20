@@ -55,13 +55,12 @@ Installation
 ------------
 
 The library can be installed using ``pip`` but you need to make sure to use the
-EngageSKA Nexus repository as the index:
+SKA artefact repository as the index:
 
 .. code-block::
 
   pip install \
-    --index-url https://nexus.engageska-portugal.pt/repository/pypi/simple \
-    --extra-index-url https://pypi.org/simple \
+    --index-url https://artefact.skao.int/repository/pypi-all/simple \
     ska-sdp-workflow
 
 To install it using a ``requirements.txt`` file, the ``pip`` options can be
@@ -69,8 +68,7 @@ added to the top of the file like this:
 
 .. code-block::
 
-  --index-url https://nexus.engageska-portugal.pt/repository/pypi/simple
-  --extra-index-url https://pypi.org/simple
+  --index-url https://artefact.skao.int/repository/pypi-all/simple
   ska-sdp-workflow
 
 Usage
