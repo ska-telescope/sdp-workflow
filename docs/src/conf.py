@@ -24,8 +24,8 @@ import sys
 
 autodoc_mock_imports = [
     "distributed",
-    "ska",
     "ska_sdp_config",
+    "ska_ser_logging",
     "ska_telmodel",
 ]
 
@@ -43,7 +43,7 @@ def setup(app):
 
 # -- Project information -----------------------------------------------------
 project = "SDP Workflow Library"
-copyright = "2019-2020, SKA SDP Developers"
+copyright = "2019-2021, SKA SDP Developers"
 author = "SKA SDP Developers"
 
 

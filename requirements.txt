@@ -1,6 +1,5 @@
---index-url https://nexus.engageska-portugal.pt/repository/pypi/simple
---extra-index-url https://pypi.org/simple
+--index-url https://artefact.skao.int/repository/pypi-all/simple
 distributed
-ska-logging >= 0.3.0
-ska-sdp-config >= 0.1.1
+ska-sdp-config
+ska-ser-logging
 ska-telescope-model
