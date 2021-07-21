@@ -1,9 +1,13 @@
 # Changelog
 
+## 0.2.5
+
+* Publish Python package in central artefact repository.
+
 ## 0.2.4
 
-* Bug fixed. Fixed boolean flags in the chart values. Updated to use 
-  workflow docker image itself for the scheduler and workers to 
+* Bug fixed. Fixed boolean flags in the chart values. Updated to use
+  workflow docker image itself for the scheduler and workers to
   guarantee that the dask and distributed versions will match.
 
 ## 0.2.3
@@ -13,6 +17,5 @@
 
 ## 0.2.2
 
-* Added functions to deploy multiple receive processes. The ports matches 
-  the actual ports the receive processes are using. 
-
+* Added functions to deploy multiple receive processes. The ports matches
+  the actual ports the receive processes are using.
